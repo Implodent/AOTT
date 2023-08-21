@@ -15,7 +15,7 @@ pub trait Span {
 impl<T: Clone> Span for Range<T> {
         type Offset = T;
         type Context = ();
-        fn new(_: Self::Context, offset: Range<Self::Offset>) -> Self {
+        fn new((): Self::Context, offset: Range<Self::Offset>) -> Self {
                 offset
         }
         fn context(&self) -> Self::Context {}

@@ -1,4 +1,4 @@
-use crate::{error::*, text::Char, MaybeRef};
+use crate::{error::{Span}, text::Char, MaybeRef};
 use core::{
         borrow::Borrow,
         hash::Hash,
@@ -73,7 +73,7 @@ pub trait Input {
         /// [`SpannedIter`](https://docs.rs/logos/0.12.0/logos/struct.Lexer.html#method.spanned) lexer generates such
         /// pairs.
         ///
-        /// Also required is an 'End Of Input' (EoI) span. This span is arbitrary, but is used by the input to produce
+        /// Also required is an 'End Of Input' (`EoI`) span. This span is arbitrary, but is used by the input to produce
         /// sensible spans that extend to the end of the input or are zero-width. Most implementations simply use some
         /// equivalent of `len..len` (i.e: a span where both the start and end offsets are set to the end of the input).
         /// However, what you choose for this span is up to you: but consider that the context, start, and end of the span

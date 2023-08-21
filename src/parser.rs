@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::{error::*, input::Input};
+use crate::{error::{Error, ParseResult, Simple}, input::Input};
 
 pub trait Parser<I: Input, O, E: ParserExtras<I>> {
         fn parse(&self, input: I) -> ParseResult<I, O, <E as ParserExtras<I>>::Error>
