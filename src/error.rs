@@ -48,14 +48,14 @@ pub trait Error<I: Input>: Sized {
         type Span: Span;
 
         /// expected end of input at `span`, found `found`
-        fn expected_eof_found<'a>(span: Self::Span, found: MaybeRef<'a, I::Token>) -> Self;
+        fn expected_eof_found(span: Self::Span, found: MaybeRef<'_, I::Token>) -> Self;
         /// unexpected end of input at `span`
         fn unexpected_eof(span: Self::Span) -> Self;
         /// expected tokens (any of) `expected`, found `found`
-        fn expected_token_found<'a>(
+        fn expected_token_found(
                 span: Self::Span,
                 expected: Vec<I::Token>,
-                found: MaybeRef<'a, I::Token>,
+                found: MaybeRef<'_, I::Token>,
         ) -> Self;
 }
 
@@ -68,7 +68,7 @@ pub struct Simple<Item> {
 impl<Item: Clone, I: Input<Token = Item>> Error<I> for Simple<Item> {
         type Span = Range<usize>;
 
-        fn expected_eof_found<'a>(span: Self::Span, found: MaybeRef<'a, Item>) -> Self {
+        fn expected_eof_found(span: Self::Span, found: MaybeRef<'_, Item>) -> Self {
                 Self {
                         span,
                         reason: SimpleReason::ExpectedEOF {
@@ -76,10 +76,10 @@ impl<Item: Clone, I: Input<Token = Item>> Error<I> for Simple<Item> {
                         },
                 }
         }
-        fn expected_token_found<'a>(
+        fn expected_token_found(
                 span: Self::Span,
                 expected: Vec<Item>,
-                found: MaybeRef<'a, Item>,
+                found: MaybeRef<'_, Item>,
         ) -> Self {
                 Self {
                         span,
