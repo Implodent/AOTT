@@ -1,0 +1,11 @@
+* AOTT - Aspect Of The TOKENS
+AOTT is a parser combinator framework / library (guh), which builds on top of chumsky's philosophies, adding a little bit of the nom sauce with functions being the primary unit of parsing (instead of structs like in chumsky).
+** Thank you:
+- [[https://github.com/zesterer][@zesterer]] for amazing work on [[https://github.com/chumsky][chumsky]] and help in the Rust Community Discord server
+- All [[https://github.com/rust-bakery/nom][nom]] contributors for their truly inspirational parser combinator framework library
+- [[https://github.com/abs0luty][@abs0luty]] for his help at the early stages of the library and ideas for potential features.
+
+** TODO / Roadmap [0/1]
+- [ ] Error recovery?
+  Possible solution: uncomment some prototype error recovery code in ParserExtras
+  and ask [[https://github.com/abs0luty][@abs0luty]] and [[https://github.com/zesterer][@zesterer]]
