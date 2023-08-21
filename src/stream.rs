@@ -1,6 +1,9 @@
-use core::{cell::Cell, ops::RangeFrom};
+use core::{
+        cell::Cell,
+        ops::{Range, RangeFrom},
+};
 
-use crate::input::{ExactSizeInput, Input, InputType};
+use crate::input::{ExactSizeInput, InputType};
 
 pub struct Stream<I: Iterator> {
         tokens: Cell<(Vec<I::Item>, Option<I>)>,
@@ -67,6 +70,11 @@ where
         }
 
         #[inline(always)]
+        fn prev(offset: Self::Offset) -> Self::Offset {
+                offset - 1 
+        }
+
+        #[inline(always)]
         unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
                 let mut other = Cell::new((Vec::new(), None));
                 self.tokens.swap(&other);
@@ -91,11 +99,12 @@ where
         I::Item: Clone,
 {
         #[inline(always)]
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Self::Span {
+        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
                 let mut other = Cell::new((Vec::new(), None));
                 self.tokens.swap(&other);
                 let len = other.get_mut().1.as_ref().expect("no iterator?!").len();
                 self.tokens.swap(&other);
-                (range.start..len).into()
+
+                range.start..len
         }
 }

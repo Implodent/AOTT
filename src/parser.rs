@@ -3,6 +3,7 @@ use core::marker::PhantomData;
 use crate::{
         error::{Error, ParseResult, Simple},
         input::{Input, InputType},
+        sync::RefC,
         *,
 };
 
@@ -192,6 +193,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>>: ParserSealed<I, O, E> {
                 input.parse(self)
         }
 
+        fn parse_with_extras(&self, input: I, context: E::Context);
+
         fn or<P: Parser<I, O, E>>(self, other: P) -> Or<Self, P>
         where
                 Self: Sized,
@@ -201,8 +204,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>>: ParserSealed<I, O, E> {
 }
 
 pub struct Or<A, B>(A, B);
-impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, B: Parser<I, O, E>> Parser<I, O, E>
-        for Or<A, B>
+impl<I: InputType + Clone, O, E: ParserExtras<I>, A: Parser<I, O, E>, B: Parser<I, O, E>>
+        Parser<I, O, E> for Or<A, B>
 where
         E::Context: Clone,
 {
@@ -216,12 +219,42 @@ where
         }
 }
 
+impl<A, B, I: InputType, O, E: ParserExtras<I>> ParserSealed<I, O, E> for Or<A, B>
+where
+        A: Parser<I, O, E>,
+        B: Parser<I, O, E>,
+{
+        fn explode<M: Mode>(&self, inp: &mut Input<I, E>) -> PResult<M, O>
+        where
+                Self: Sized,
+        {
+                self.0.explode::<M>(inp).or(self.1.explode::<M>(inp))
+        }
+
+        fn boxed<'b>(self) -> Boxed<'b, I, O, E>
+        where
+                Self: MaybeSync + Sized + 'b,
+        {
+                Boxed {
+                        inner: RefC::new(self),
+                }
+        }
+
+        fn explode_check(&self, inp: &mut Input<I, E>) -> PResult<Check, O> {
+                self.0.explode_check(inp).or(self.1.explode_check(inp))
+        }
+
+        fn explode_emit(&self, inp: &mut Input<I, E>) -> PResult<Emit, O> {
+                self.0.explode_emit(inp).or(self.1.explode_emit(inp))
+        }
+}
+
 impl<
                 I: InputType,
                 O,
                 E: ParserExtras<I>,
                 // only input
-                F: Fn(Input<I>) -> ParseResult<I, O, <E as ParserExtras<I>>::Error>,
+                F: Fn(&mut Input<I, E>) -> ParseResult<I, O, <E as ParserExtras<I>>::Error>,
         > Parser<I, O, E> for F
 {
         fn parse_with_extras(
@@ -231,6 +264,33 @@ impl<
         ) -> ParseResult<I, O, <E as ParserExtras<I>>::Error> {
                 self(input)
         }
+}
+
+impl<
+                I: InputType,
+                O,
+                E: ParserExtras<I>,
+                // only input
+                F: Fn(&mut Input<I, E>) -> ParseResult<I, O, <E as ParserExtras<I>>::Error>,
+        > ParserSealed<I, O, E> for F
+{
+        fn boxed<'b>(self) -> Boxed<'b, I, O, E>
+        where
+                Self: MaybeSync + Sized + 'b,
+        {
+                Boxed {
+                        inner: RefC::new(self),
+                }
+        }
+
+        fn explode<M: Mode>(&self, inp: &mut Input<I, E>) -> PResult<M, O>
+        where
+                Self: Sized,
+        {
+                self(inp)
+        }
+
+        explode_extra!(O);
 }
 
 pub trait ParserExtras<I: InputType> {
@@ -298,21 +358,21 @@ where
         explode_extra!(O);
 }
 
-impl<I, O, E, T> ParserSealed<I, O, E> for ::alloc::boxed::Box<T>
-where
-        I: InputType,
-        E: ParserExtras<I>,
-        T: Parser<I, O, E>,
-{
-        fn explode<M: Mode>(&self, inp: &mut Input<I, E>) -> PResult<M, O>
-        where
-                Self: Sized,
-        {
-                T::explode::<M>(self, inp)
-        }
+// impl<I, O, E, T> ParserSealed<I, O, E> for ::alloc::boxed::Box<T>
+// where
+//         I: InputType,
+//         E: ParserExtras<I>,
+//         T: Parser<I, O, E>,
+// {
+//         fn explode<M: Mode>(&self, inp: &mut Input<I, E>) -> PResult<M, O>
+//         where
+//                 Self: Sized,
+//         {
+//                 T::explode::<M>(self, inp)
+//         }
 
-        explode_extra!(O);
-}
+//         explode_extra!(O);
+// }
 
 impl<I, O, E, T> ParserSealed<I, O, E> for ::alloc::rc::Rc<T>
 where

@@ -106,8 +106,9 @@ mod sync {
         impl<T> MaybeSync for T {}
 }
 
-use sync::{DynParser, MaybeSync, RefC, RefW};
+use sync::{DynParser, MaybeSync};
 
+#[macro_export]
 macro_rules! explode_extra {
         ( $O :ty ) => {
                 #[inline(always)]

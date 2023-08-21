@@ -1,11 +1,16 @@
 use crate::MaybeRef;
+use crate::MaybeUninitExt;
 use alloc::rc::Rc;
 use alloc::sync::Arc;
 use core::borrow::Borrow;
 use core::cell::Cell;
+use core::cell::RefCell;
+use core::cell::UnsafeCell;
 use core::hash::Hash;
+use core::mem::MaybeUninit;
 use core::ops::Range;
 use core::ops::RangeFrom;
+use hashbrown::HashMap;
 
 use alloc::collections::LinkedList;
 use hashbrown::HashSet;

@@ -1,10 +1,6 @@
 use core::ops::Range;
 
-use crate::{
-        input::{Input, InputType},
-        parser::ParserExtras,
-        MaybeRef,
-};
+use crate::{input::InputType, parser::ParserExtras, MaybeRef};
 
 pub trait Span {
         type Context;
