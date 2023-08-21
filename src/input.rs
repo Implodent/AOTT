@@ -1,10 +1,16 @@
-use crate::{error::{Span}, text::Char, MaybeRef};
+use crate::{error::Span, text::Char, MaybeRef};
 use core::{
         borrow::Borrow,
         hash::Hash,
         marker::PhantomData,
         ops::{Range, RangeFrom},
 };
+
+pub struct InputOf<I: Input>(I::Offset, I);
+impl<I: Input> InputOf<I> {
+        pub fn next(self)
+}
+
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
 /// supports backtracking and a few other features required by the crate.
 ///

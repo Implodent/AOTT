@@ -1,6 +1,10 @@
 use core::ops::Range;
 
-use crate::{input::Input, MaybeRef};
+use crate::{
+        input::{Input, InputOf},
+        parser::ParserExtras,
+        MaybeRef,
+};
 
 pub trait Span {
         type Context;
@@ -106,7 +110,10 @@ pub enum SimpleReason<Item> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseResult<I: Input, O, E: Error<I>> {
-        pub input: I,
+        pub input: InputOf<I>,
         pub output: Option<O>,
         pub errors: Vec<E>,
 }
+
+pub type IResult<I: Input, O, E: ParserExtras<I>> =
+        ParseResult<I, O, <E as ParserExtras<I>>::Error>;
