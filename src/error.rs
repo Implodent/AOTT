@@ -48,14 +48,14 @@ pub trait Error<I: Input>: Sized {
         type Span: Span;
 
         /// expected end of input at `span`, found `found`
-        fn expected_eof_found<'a>(span: Self::Span, found: Option<MaybeRef<'a, I::Token>>) -> Self;
+        fn expected_eof_found<'a>(span: Self::Span, found: MaybeRef<'a, I::Token>) -> Self;
         /// unexpected end of input at `span`
         fn unexpected_eof(span: Self::Span) -> Self;
         /// expected tokens (any of) `expected`, found `found`
         fn expected_token_found<'a>(
                 span: Self::Span,
                 expected: Vec<I::Token>,
-                found: Option<MaybeRef<'a, I::Token>>,
+                found: MaybeRef<'a, I::Token>,
         ) -> Self;
 }
 
@@ -65,19 +65,28 @@ pub struct Simple<Item> {
         pub reason: SimpleReason<Item>,
 }
 
-impl<Item, I: Input<Token = Item>> Error<I> for Simple<Item> {
+impl<Item: Clone, I: Input<Token = Item>> Error<I> for Simple<Item> {
         type Span = Range<usize>;
 
-        fn expected_eof_found(span: Self::Span, found: Item) -> Self {
+        fn expected_eof_found<'a>(span: Self::Span, found: MaybeRef<'a, Item>) -> Self {
                 Self {
                         span,
-                        reason: SimpleReason::ExpectedEOF { found },
+                        reason: SimpleReason::ExpectedEOF {
+                                found: found.into_clone(),
+                        },
                 }
         }
-        fn expected_token_found(span: Self::Span, expected: Vec<Item>, found: Item) -> Self {
+        fn expected_token_found<'a>(
+                span: Self::Span,
+                expected: Vec<Item>,
+                found: MaybeRef<'a, Item>,
+        ) -> Self {
                 Self {
                         span,
-                        reason: SimpleReason::ExpectedTokenFound { expected, found },
+                        reason: SimpleReason::ExpectedTokenFound {
+                                expected,
+                                found: found.into_clone(),
+                        },
                 }
         }
         fn unexpected_eof(span: Self::Span) -> Self {

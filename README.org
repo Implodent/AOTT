@@ -5,7 +5,7 @@ AOTT is a parser combinator framework / library (guh), which builds on top of ch
 - All [[https://github.com/rust-bakery/nom][nom]] contributors for their truly inspirational parser combinator framework library
 - [[https://github.com/abs0luty][@abs0luty]] for his help at the early stages of the library and ideas for potential features.
 
-** TODO / Roadmap [0/1]
+** TO-DO / Roadmap [0/1]
 - [ ] Error recovery?
   Possible solution: uncomment some prototype error recovery code in ParserExtras
   and ask [[https://github.com/abs0luty][@abs0luty]] and [[https://github.com/zesterer][@zesterer]]

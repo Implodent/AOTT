@@ -16,8 +16,11 @@ pub enum Maybe<T, R: Deref<Target = T>> {
 
 pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
 
-#[inline(never)]
-fn do_i_hate_llvm(h: &i32) -> bool {
-        drop(h);
-        true
+impl<T: Clone, R: Deref<Target = T>> Maybe<T, R> {
+        pub fn into_clone(self) -> T {
+                match self {
+                        Self::Ref(r) => r.to_owned(),
+                        Self::Val(v) => v,
+                }
+        }
 }

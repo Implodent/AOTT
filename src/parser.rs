@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use crate::{error::*, input::Input};
 
 pub trait Parser<I: Input, O, E: ParserExtras<I>> {
