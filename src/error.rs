@@ -1,7 +1,7 @@
 use core::ops::Range;
 
 use crate::{
-        input::{Input, InputOf},
+        input::{Input, InputType},
         parser::ParserExtras,
         MaybeRef,
 };
@@ -48,7 +48,7 @@ impl<T: Clone, C: Clone> Span for (C, Range<T>) {
         }
 }
 
-pub trait Error<I: Input>: Sized {
+pub trait Error<I: InputType>: Sized {
         type Span: Span;
 
         /// expected end of input at `span`, found `found`
@@ -62,6 +62,18 @@ pub trait Error<I: Input>: Sized {
                 found: MaybeRef<'_, I::Token>,
         ) -> Self;
 }
+#[derive(Clone)]
+pub(crate) struct Located<T, E> {
+        pub(crate) pos: T,
+        pub(crate) err: E,
+}
+
+impl<T, E> Located<T, E> {
+        #[inline]
+        pub fn at(pos: T, err: E) -> Self {
+                Self { pos, err }
+        }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Simple<Item> {
@@ -69,7 +81,7 @@ pub struct Simple<Item> {
         pub reason: SimpleReason<Item>,
 }
 
-impl<Item: Clone, I: Input<Token = Item>> Error<I> for Simple<Item> {
+impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {
         type Span = Range<usize>;
 
         fn expected_eof_found(span: Self::Span, found: MaybeRef<'_, Item>) -> Self {
@@ -109,11 +121,26 @@ pub enum SimpleReason<Item> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseResult<I: Input, O, E: Error<I>> {
-        pub input: InputOf<I>,
+pub struct ParseResult<I, O, E> {
+        pub input: I,
         pub output: Option<O>,
         pub errors: Vec<E>,
 }
 
-pub type IResult<I: Input, O, E: ParserExtras<I>> =
+impl<I, O, E> ParseResult<I, O, E> {
+        pub fn or(mut self, other: Self) -> Self {
+                self.errors.extend(other.errors);
+                Self {
+                        input: if self.output.is_some() {
+                                self.input
+                        } else {
+                                other.input
+                        },
+                        output: self.output.or(other.output),
+                        errors: self.errors,
+                }
+        }
+}
+
+pub type IResult<I: InputType, O, E: ParserExtras<I>> =
         ParseResult<I, O, <E as ParserExtras<I>>::Error>;

@@ -10,6 +10,7 @@ pub mod error;
 pub mod input;
 pub mod parser;
 pub mod primitive;
+pub mod stream;
 pub mod text;
 
 pub use error::IResult;
@@ -97,7 +98,7 @@ mod sync {
 
         pub(crate) type RefC<T> = alloc::rc::Rc<T>;
         pub(crate) type RefW<T> = alloc::rc::Weak<T>;
-        pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + 'b;
+        pub(crate) type DynParser<'b, I, O, E> = dyn Parser<I, O, E> + 'b;
 
         /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
         /// enabled. Used to constrain API usage succinctly and easily.
@@ -106,3 +107,16 @@ mod sync {
 }
 
 use sync::{DynParser, MaybeSync, RefC, RefW};
+
+macro_rules! explode_extra {
+        ( $O :ty ) => {
+                #[inline(always)]
+                fn explode_emit(&self, inp: &mut Input<I, E>) -> PResult<Emit, $O> {
+                        ParserSealed::<I, $O, E>::explode::<Emit>(self, inp)
+                }
+                #[inline(always)]
+                fn explode_check(&self, inp: &mut Input<I, E>) -> PResult<Check, $O> {
+                        ParserSealed::<I, $O, E>::explode::<Check>(self, inp)
+                }
+        };
+}

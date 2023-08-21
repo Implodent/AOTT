@@ -1,3 +1,12 @@
+use crate::MaybeRef;
+use alloc::rc::Rc;
+use alloc::sync::Arc;
+use core::borrow::Borrow;
+use core::cell::Cell;
+use core::hash::Hash;
+use core::ops::Range;
+use core::ops::RangeFrom;
+
 use alloc::collections::LinkedList;
 use hashbrown::HashSet;
 
