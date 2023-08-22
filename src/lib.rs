@@ -22,6 +22,15 @@ pub enum Maybe<T, R: Deref<Target = T>> {
 
 pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
 
+impl<'a, T> MaybeRef<'a, T> {
+        pub fn borrow_as_t<'b: 'a>(&'b self) -> &'b T {
+                match self {
+                        Self::Ref(r) => *r,
+                        Self::Val(ref v) => v,
+                }
+        }
+}
+
 impl<T: Clone, R: Deref<Target = T>> Maybe<T, R> {
         pub fn into_clone(self) -> T {
                 match self {
@@ -112,12 +121,18 @@ use sync::{DynParser, MaybeSync};
 macro_rules! explode_extra {
         ( $O :ty ) => {
                 #[inline(always)]
-                fn explode_emit(&self, inp: &mut Input<I, E>) -> PResult<Emit, $O> {
-                        ParserSealed::<I, $O, E>::explode::<Emit>(self, inp)
+                fn explode_emit<'parse>(
+                        &self,
+                        inp: Input<'parse, I, E>,
+                ) -> PResult<'parse, I, E, Emit, $O> {
+                        Parser::<I, $O, E>::explode::<Emit>(self, inp)
                 }
                 #[inline(always)]
-                fn explode_check(&self, inp: &mut Input<I, E>) -> PResult<Check, $O> {
-                        ParserSealed::<I, $O, E>::explode::<Check>(self, inp)
+                fn explode_check<'parse>(
+                        &self,
+                        inp: Input<'parse, I, E>,
+                ) -> PResult<'parse, I, E, Check, $O> {
+                        Parser::<I, $O, E>::explode::<Check>(self, inp)
                 }
         };
 }
