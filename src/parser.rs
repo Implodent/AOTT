@@ -20,7 +20,7 @@ mod private {
         pub type PResult<'parse, I, E, M, O> =
                 (Input<'parse, I, E>, Result<<M as Mode>::Output<O>, ()>);
         /// The result of calling [`IterParser::next`]
-        pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
+        // pub type IPResult<M, O> = Result<Option<<M as Mode>::Output<O>>, ()>;
 
         /// An abstract parse mode - can be [`Emit`] or [`Check`] in practice, and represents the
         /// common interface for handling both in the same method.
@@ -106,7 +106,7 @@ mod private {
                         y: Self::Output<U>,
                         f: F,
                 ) {
-                        f(x, y)
+                        f(x, y);
                 }
                 #[inline(always)]
                 fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]> {
@@ -135,7 +135,7 @@ mod private {
                 #[inline(always)]
                 fn bind<T, F: FnOnce() -> T>(_: F) -> Self::Output<T> {}
                 #[inline(always)]
-                fn map<T, U, F: FnOnce(T) -> U>(_: Self::Output<T>, _: F) -> Self::Output<U> {}
+                fn map<T, U, F: FnOnce(T) -> U>((): Self::Output<T>, _: F) -> Self::Output<U> {}
                 #[inline(always)]
                 fn choose<A, T, E, F: FnOnce(A) -> Result<T, E>, G: FnOnce(A) -> Result<(), E>>(
                         arg: A,
@@ -146,15 +146,15 @@ mod private {
                 }
                 #[inline(always)]
                 fn combine<T, U, V, F: FnOnce(T, U) -> V>(
-                        _: Self::Output<T>,
-                        _: Self::Output<U>,
+                        (): Self::Output<T>,
+                        (): Self::Output<U>,
                         _: F,
                 ) -> Self::Output<V> {
                 }
                 #[inline(always)]
                 fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
                         _: &mut Self::Output<T>,
-                        _: Self::Output<U>,
+                        (): Self::Output<U>,
                         _: F,
                 ) {
                 }

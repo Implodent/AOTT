@@ -135,7 +135,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                         errors: Errors::default(),
                 }
         }
-        pub fn as_ref_at_zero<'this>(&'this mut self) -> Input<'this, I, E> {
+        pub fn as_ref_at_zero(&mut self) -> Input<'_, I, E> {
                 Input {
                         offset: self.input.start(),
                         input: &self.input,
@@ -143,7 +143,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                         cx: &self.cx,
                 }
         }
-        pub fn as_ref_at<'this>(&'this mut self, offset: I::Offset) -> Input<'this, I, E> {
+        pub fn as_ref_at(&mut self, offset: I::Offset) -> Input<'_, I, E> {
                 Input {
                         offset,
                         input: &self.input,
@@ -293,13 +293,13 @@ pub trait StrInput<'a, C: Char>:
 impl<'a> ExactSizeInput for &'a str {
         #[inline(always)]
         unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
-                (range.start..self.len()).into()
+                range.start..self.len()
         }
 }
 impl<'a, T: Clone> ExactSizeInput for &'a [T] {
         #[inline(always)]
         unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
-                (range.start..self.len()).into()
+                range.start..self.len()
         }
 }
 // impl<'a, T: Clone + 'a, const N: usize> ExactSizeInput for &'a [T; N] {

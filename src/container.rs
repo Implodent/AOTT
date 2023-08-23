@@ -20,7 +20,7 @@ pub trait Container<T>: Default {
         /// Create a container, attempting to pre-allocate enough space for `n` items.
         ///
         /// Failure to do so is not a problem, the size is only a hint.
-        fn with_capacity(n: usize) -> Self {
+        #[must_use] fn with_capacity(n: usize) -> Self {
                 let _ = n;
                 Self::default()
         }
@@ -37,7 +37,7 @@ where
         }
 
         fn push(&mut self, item: T) {
-                C::push(self, item)
+                C::push(self, item);
         }
 }
 
@@ -50,7 +50,7 @@ where
         }
 
         fn push(&mut self, item: T) {
-                self.get_mut().push(item)
+                self.get_mut().push(item);
         }
 }
 
@@ -63,7 +63,7 @@ where
         }
 
         fn push(&mut self, item: T) {
-                self.get_mut().push(item)
+                self.get_mut().push(item);
         }
 }
 
@@ -99,7 +99,7 @@ impl Container<char> for String {
                 Self::with_capacity(n)
         }
         fn push(&mut self, item: char) {
-                (*self).push(item)
+                (*self).push(item);
         }
 }
 
@@ -216,13 +216,13 @@ where
                 Box::new(C::uninit())
         }
         fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
-                C::write(&mut *uninit, i, item)
+                C::write(&mut *uninit, i, item);
         }
         unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-                C::drop_before(&mut *uninit, i)
+                C::drop_before(&mut *uninit, i);
         }
         unsafe fn take(uninit: Self::Uninit) -> Self {
-                Box::from_raw(Box::into_raw(uninit) as *mut C)
+                Box::from_raw(Box::into_raw(uninit).cast::<C>())
         }
 }
 
@@ -239,11 +239,11 @@ where
         }
         fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
                 // SAFETY: We're the only owners of the uninit data at this point
-                C::write(unsafe { &mut *uninit.get() }, i, item)
+                C::write(unsafe { &mut *uninit.get() }, i, item);
         }
         unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
                 // SAFETY: We're the only owners of the uninit data at this point
-                C::drop_before(unsafe { &mut *uninit.get() }, i)
+                C::drop_before(unsafe { &mut *uninit.get() }, i);
         }
         unsafe fn take(uninit: Self::Uninit) -> Self {
                 Rc::from_raw(Rc::into_raw(uninit) as *mut C)
@@ -263,11 +263,11 @@ where
         }
         fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
                 // SAFETY: We're the only owners of the uninit data at this point
-                C::write(unsafe { &mut *uninit.get() }, i, item)
+                C::write(unsafe { &mut *uninit.get() }, i, item);
         }
         unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
                 // SAFETY: We're the only owners of the uninit data at this point
-                C::drop_before(unsafe { &mut *uninit.get() }, i)
+                C::drop_before(unsafe { &mut *uninit.get() }, i);
         }
         unsafe fn take(uninit: Self::Uninit) -> Self {
                 Arc::from_raw(Arc::into_raw(uninit) as *mut C)

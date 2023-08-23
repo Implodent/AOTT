@@ -1,6 +1,4 @@
 use super::*;
-use crate::MaybeUninit;
-use crate::MaybeUninitExt;
 
 /// See [`group`].
 #[derive(Copy, Clone)]

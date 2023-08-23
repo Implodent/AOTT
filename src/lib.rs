@@ -1,6 +1,7 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::inline_always)]
+#![allow(clippy::wildcard_imports)]
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 
@@ -84,13 +85,14 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
         }
 
         unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
-                let out = (&uninit as *const [Self; N] as *const [T; N]).read();
+                let out = (std::ptr::addr_of!(uninit) as *const [T; N]).read();
                 core::mem::forget(uninit);
                 out
         }
 }
 
 #[cfg(feature = "sync")]
+#[allow(dead_code)]
 mod sync {
         use super::*;
 
@@ -105,6 +107,7 @@ mod sync {
 }
 
 #[cfg(not(feature = "sync"))]
+#[allow(dead_code)]
 mod sync {
         use crate::parser::Parser;
 

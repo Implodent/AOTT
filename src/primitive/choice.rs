@@ -137,7 +137,7 @@ where
                         });
                         (inp, Err(()))
                 } else {
-                        let before = inp.save();
+                        let _before = inp.save();
                         // match self.parsers.iter().find_map(|parser| {
                         //         inp.rewind(before);
                         //         match parser.explode::<M>(inp) {
@@ -149,9 +149,9 @@ where
                         //         (inp, None) => (inp, Err(())),
                         // }
 
-                        let mut iter = self.parsers.iter();
+                        let iter = self.parsers.iter();
                         let mut i = inp;
-                        while let Some(parser) = iter.next() {
+                        for parser in iter {
                                 match parser.explode::<M>(i) {
                                         (inp, Ok(out)) => return (inp, Ok(out)),
                                         (inp, Err(())) => i = inp,

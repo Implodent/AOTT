@@ -95,7 +95,7 @@ impl<
         where
                 Self: Sized,
         {
-                let (mut inp, out) = self.0.explode_emit(inp);
+                let (inp, out) = self.0.explode_emit(inp);
                 let Ok(ok) = out else {
                         return (inp, Err(()));
                 };
@@ -112,7 +112,7 @@ impl<
                 }
         }
         fn explode_emit<'parse>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, Emit, U> {
-                let (mut inp, out) = self.0.explode_emit(inp);
+                let (inp, out) = self.0.explode_emit(inp);
                 let Ok(ok) = out else {
                         return (inp, Err(()));
                 };

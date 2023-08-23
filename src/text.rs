@@ -1,7 +1,6 @@
 use crate::{
-        container::OrderedSeq,
         input::{Input, InputType, StrInput},
-        parser::{Parser, ParserExtras},
+        parser::ParserExtras,
         IResult,
 };
 

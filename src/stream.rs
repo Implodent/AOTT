@@ -27,7 +27,7 @@ impl<I: Iterator> Stream<I> {
                 }
         }
 
-        /// Box this stream, turning it into a [BoxedStream]. This can be useful in cases where your parser accepts input
+        /// Box this stream, turning it into a [`BoxedStream`]. This can be useful in cases where your parser accepts input
         /// from several different sources and it needs to work with all of them.
         pub fn boxed<'a>(self) -> BoxedStream<'a, I::Item>
         where
@@ -91,7 +91,7 @@ where
 
                 self.tokens.swap(&other);
 
-                (offset + tok.is_some() as usize, tok)
+                (offset + usize::from(tok.is_some()), tok)
         }
 }
 impl<I: ExactSizeIterator> ExactSizeInput for Stream<I>

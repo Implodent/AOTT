@@ -35,7 +35,7 @@ impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, Vec<O>, 
                 loop {
                         let befunge = inp.save();
                         match self.0.explode_check(inp) {
-                                (input, Ok(_)) => inp = input,
+                                (input, Ok(())) => inp = input,
                                 (mut input, Err(())) => {
                                         input.rewind(befunge);
                                         return (input, Ok(()));
