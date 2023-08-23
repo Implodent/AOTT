@@ -4,6 +4,7 @@ use crate::{
         error::{Error, Located, Simple},
         explode_extra,
         input::{Input, InputType},
+        primitive::*,
         sync::RefC,
         *,
 };
@@ -202,6 +203,18 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 To(self, value, PhantomData)
         }
+        fn ignored(self) -> Ignored<Self, O>
+        where
+                Self: Sized,
+        {
+                Ignored(self, EmptyPhantom::new())
+        }
+        fn try_map<F: Fn(U) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
+        where
+                Self: Sized,
+        {
+                TryMap(self, f, PhantomData, PhantomData)
+        }
         #[doc(hidden)]
         fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>
         where
@@ -223,75 +236,6 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Boxed {
                         inner: RefC::new(self),
                 }
-        }
-}
-
-pub struct Or<A, B>(A, B);
-
-impl<A, B, I: InputType, O, E: ParserExtras<I>> Parser<I, O, E> for Or<A, B>
-where
-        A: Parser<I, O, E>,
-        B: Parser<I, O, E>,
-{
-        fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>
-        where
-                Self: Sized,
-        {
-                let befunge = inp.save();
-                match self.0.explode::<M>(inp) {
-                        real @ (_, Ok(_)) => real,
-                        (mut inp, Err(())) => {
-                                inp.rewind(befunge);
-                                self.1.explode::<M>(inp)
-                        }
-                }
-        }
-        explode_extra!(O);
-}
-
-pub struct Map<A, O, F, U>(A, PhantomData<O>, F, PhantomData<U>);
-impl<I: InputType, O, E: ParserExtras<I>, U, A: Parser<I, O, E>, F: Fn(O) -> U> Parser<I, U, E>
-        for Map<A, O, F, U>
-{
-        fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, U>
-        where
-                Self: Sized,
-        {
-                let (inp, out) = self.0.explode::<M>(inp);
-                (inp, out.map(|o| M::map(o, |ou| self.2(ou))))
-        }
-
-        fn explode_emit<'parse>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, Emit, U> {
-                self.explode::<Emit>(inp)
-        }
-        fn explode_check<'parse>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Check, U> {
-                self.explode::<Check>(inp)
-        }
-}
-
-pub struct To<A, O, U>(A, U, PhantomData<O>);
-impl<I: InputType, O, E: ParserExtras<I>, U: Clone, A: Parser<I, O, E>> Parser<I, U, E>
-        for To<A, O, U>
-{
-        fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, U>
-        where
-                Self: Sized,
-        {
-                let (inp, out) = self.0.explode::<M>(inp);
-                (inp, out.map(|_| M::bind(|| self.1.clone())))
-        }
-        fn explode_emit<'parse>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, Emit, U> {
-                let (inp, out) = self.0.explode_emit(inp);
-                (inp, out.map(|_| self.1.clone()))
-        }
-        fn explode_check<'parse>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Check, U> {
-                self.0.explode_check(inp)
         }
 }
 
@@ -321,7 +265,6 @@ impl<
 
         explode_extra!(O);
 }
-
 pub trait ParserExtras<I: InputType> {
         type Error: Error<I>;
         type Context;

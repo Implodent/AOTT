@@ -256,7 +256,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
 
 #[derive(Debug)]
 pub struct Marker<I: InputType> {
-        offset: I::Offset,
+        pub offset: I::Offset,
         err_count: usize,
 }
 impl<I: InputType> Clone for Marker<I> {
@@ -290,7 +290,24 @@ pub trait StrInput<'a, C: Char>:
         InputType<Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
 {
 }
-
+impl<'a> ExactSizeInput for &'a str {
+        #[inline(always)]
+        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+                (range.start..self.len()).into()
+        }
+}
+impl<'a, T: Clone> ExactSizeInput for &'a [T] {
+        #[inline(always)]
+        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+                (range.start..self.len()).into()
+        }
+}
+// impl<'a, T: Clone + 'a, const N: usize> ExactSizeInput for &'a [T; N] {
+//         #[inline(always)]
+//         unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+//                 (range.start..N).into()
+//         }
+// }
 impl<'a> StrInput<'a, char> for &'a str {}
 
 impl<'a> SliceInput<'a> for &'a str {
@@ -311,16 +328,10 @@ impl<'a> SliceInput<'a> for &'a str {
                 &self[from]
         }
 }
-impl<'a, T> ExactSizeInput for &'a [T] {
-        #[inline(always)]
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
-                (range.start..self.len()).into()
-        }
-}
 
 impl<'a> StrInput<'a, u8> for &'a [u8] {}
 
-impl<'a, T> SliceInput<'a> for &'a [T] {
+impl<'a, T: Clone> SliceInput<'a> for &'a [T] {
         type Slice = &'a [T];
 
         #[inline(always)]

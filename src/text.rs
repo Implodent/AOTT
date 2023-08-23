@@ -1,7 +1,7 @@
 use crate::{
         container::OrderedSeq,
         input::{Input, InputType, StrInput},
-        parser::ParserExtras,
+        parser::{Parser, ParserExtras},
         IResult,
 };
 
@@ -74,10 +74,10 @@ pub fn keyword<
         E: ParserExtras<I>,
         Str: AsRef<C::Str> + 'a + Clone,
 >(
-        keyword: Str,
+        _keyword: Str,
 ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
 where
         C::Str: PartialEq,
 {
-        move |input| todo!()
+        move |_| todo!()
 }

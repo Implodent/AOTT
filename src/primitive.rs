@@ -9,17 +9,21 @@ use crate::{
         explode_extra,
         input::{Input, InputType},
         parser::{Check, Emit, Mode, PResult, Parser, ParserExtras},
-        IResult, MaybeRef,
+        EmptyPhantom, IResult, MaybeRef,
 };
 
 mod choice;
 mod filter;
 mod just;
+mod map;
+mod repeated;
 mod tuple;
 
 pub use choice::*;
 pub use filter::*;
 pub use just::just;
+pub use map::*;
+pub use repeated::*;
 pub use tuple::*;
 
 pub fn any<I: InputType, E: ParserExtras<I>>(
@@ -36,6 +40,24 @@ pub fn any<I: InputType, E: ParserExtras<I>>(
                         Err((input, err))
                 }
         }
+}
+
+#[derive(Copy, Clone)]
+pub struct Ignored<A, OA>(pub(crate) A, pub(crate) EmptyPhantom<OA>);
+impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
+        for Ignored<A, OA>
+{
+        fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, ()>
+        where
+                Self: Sized,
+        {
+                match self.0.explode_check(inp) {
+                        (inp, Ok(())) => (inp, Ok(M::bind(|| {}))),
+                        (inp, Err(())) => (inp, Err(())),
+                }
+        }
+
+        explode_extra!(());
 }
 
 #[cfg(test)]
