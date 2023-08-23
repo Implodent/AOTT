@@ -11,6 +11,8 @@ pub mod input;
 pub mod parser;
 pub mod primitive;
 pub mod stream;
+
+#[cfg(feature = "builtin-text")]
 pub mod text;
 
 pub mod prelude {}

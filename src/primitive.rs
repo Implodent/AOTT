@@ -22,6 +22,22 @@ pub use filter::*;
 pub use just::just;
 pub use tuple::*;
 
+pub fn any<I: InputType, E: ParserExtras<I>>(
+        mut input: Input<'_, I, E>,
+) -> IResult<'_, I, E, I::Token> {
+        let befunge = input.offset;
+        match input.next() {
+                Some(token) => Ok((input, token)),
+                None => {
+                        let err = Error::unexpected_eof(
+                                Span::new_usize(input.span_since(befunge)),
+                                None,
+                        );
+                        Err((input, err))
+                }
+        }
+}
+
 #[cfg(test)]
 mod test {
         use crate::{
@@ -100,16 +116,15 @@ mod test {
                 }
                 type Tokens = Stream<<Vec<Token> as IntoIterator>::IntoIter>;
 
-                fn bool(inp: Input<'_, Tokens>) -> IResult<'_, Tokens, SimpleExtras<Tokens>, bool> {
+                fn bool() -> impl Parser<Tokens, bool, SimpleExtras<Tokens>> {
                         choice((just(Token::KwTrue).to(true), just(Token::KwFalse).to(false)))
-                                .parse(inp)
                 }
                 fn if_statement(
                         inp: Input<'_, Tokens>,
                 ) -> IResult<'_, Tokens, SimpleExtras<Tokens>, IfStatement> {
                         tuple((
                                 just(Token::KwIf),
-                                bool,
+                                bool(),
                                 just(Token::OpenCurly),
                                 just(Token::KwPrint),
                                 select!(Token::Str(str) => str),

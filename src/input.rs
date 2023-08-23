@@ -8,6 +8,7 @@ use crate::{
         error::Located,
         parser::{Emit, Parser, ParserExtras, SimpleExtras},
         stream::Stream,
+        text::Char,
 };
 
 use self::private::Sealed;
@@ -264,3 +265,76 @@ impl<I: InputType> Clone for Marker<I> {
         }
 }
 impl<I: InputType> Copy for Marker<I> {}
+
+/// Implemented by inputs that represent slice-like streams of input tokens.
+pub trait SliceInput<'a>: ExactSizeInput {
+        /// The unsized slice type of this input. For [`&str`] it's `&'a str`, and for [`&[T]`] it will be `&'a [T]`.
+        type Slice: 'a;
+
+        /// Get the full slice of the input
+        #[doc(hidden)]
+        fn full_slice(&self) -> Self::Slice;
+
+        /// Get a slice from a start and end offset
+        // TODO: Make unsafe
+        #[doc(hidden)]
+        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice;
+
+        /// Get a slice from a start offset till the end of the input
+        // TODO: Make unsafe
+        #[doc(hidden)]
+        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice;
+}
+
+pub trait StrInput<'a, C: Char>:
+        InputType<Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
+{
+}
+
+impl<'a> StrInput<'a, char> for &'a str {}
+
+impl<'a> SliceInput<'a> for &'a str {
+        type Slice = &'a str;
+
+        #[inline(always)]
+        fn full_slice(&self) -> Self::Slice {
+                *self
+        }
+
+        #[inline(always)]
+        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+                &self[range]
+        }
+
+        #[inline(always)]
+        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+                &self[from]
+        }
+}
+impl<'a, T> ExactSizeInput for &'a [T] {
+        #[inline(always)]
+        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+                (range.start..self.len()).into()
+        }
+}
+
+impl<'a> StrInput<'a, u8> for &'a [u8] {}
+
+impl<'a, T> SliceInput<'a> for &'a [T] {
+        type Slice = &'a [T];
+
+        #[inline(always)]
+        fn full_slice(&self) -> Self::Slice {
+                *self
+        }
+
+        #[inline(always)]
+        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+                &self[range]
+        }
+
+        #[inline(always)]
+        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+                &self[from]
+        }
+}

@@ -1,3 +1,10 @@
+use crate::{
+        container::OrderedSeq,
+        input::{Input, InputType, StrInput},
+        parser::ParserExtras,
+        IResult,
+};
+
 mod private {
         pub trait Sealed {}
 }
@@ -58,4 +65,19 @@ impl Char for u8 {
         fn to_char(&self) -> char {
                 *self as char
         }
+}
+
+pub fn keyword<
+        'a,
+        C: Char + 'a,
+        I: InputType + StrInput<'a, C>,
+        E: ParserExtras<I>,
+        Str: AsRef<C::Str> + 'a + Clone,
+>(
+        keyword: Str,
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
+where
+        C::Str: PartialEq,
+{
+        move |input| todo!()
 }

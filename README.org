@@ -16,12 +16,13 @@ with functions as the primary unit of parsing (like in nom!), then I flomped int
 - All [[https://github.com/rust-bakery/nom][nom]] contributors for their truly inspirational parser combinator framework library
 - [[https://github.com/abs0luty][@abs0luty]] for his help at the early stages of the library and ideas for potential features.
 ** TO-DO list / Roadmap [0/2]
-- [-] Full feature parity with chumsky [1/2]
-  - [X] Primitives [4/4]
+- [-] Full feature parity with chumsky [0/2]
+  - [-] Primitives [4/5]
     - [X] just (and container types)
     - [X] filter, filter_map, select
     - [X] group (renamed to tuple)
     - [X] choice
+    - [ ] any
   - [-] All Parser:: functions [2/5]
     - [X] .or
     - [X] .map, .to
