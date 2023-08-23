@@ -215,6 +215,12 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
+        fn filter<F: Fn(&O) -> bool>(self, f: F) -> FilterParser<Self, F, O>
+        where
+                Self: Sized,
+        {
+                FilterParser(self, f, PhantomData)
+        }
         #[doc(hidden)]
         fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>
         where
