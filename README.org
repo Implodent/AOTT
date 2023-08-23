@@ -1,11 +1,31 @@
 * AOTT - Aspect Of The TOKENS
-AOTT is a PCF / PCL (parser combinator framework / library), which builds on top of chumsky's philosophies, adding a little bit of the nom sauce with functions being the primary unit of parsing (instead of structs like in chumsky).
-** Thank you:
+AOTT is a Parser Combinator Framework, a library which allows you to munch
+tokens declaratively, or imperatively, or both at the same time, how you would like.
+AOTT gives you some neat primitives that you could build anything with,
+and, if you want, builtin utilities (NOT YET IMPLEMENTED!) for dealing with
+text (feature flag =builtin-text=, on by default),
+or bytes (feature flag =builtin-bytes=, off by default).
+
+** Compatibility
+AOTT is designed to be compatible with chumsky, so existing chumsky parsers will work / work with the minimum amount of changes (like removing lifetimes... /"ME HATE LIFETIME ARGUMENT! LIFETIME ARGUMENT BAD!"/).
+A list of regexes to fix the parsers will be provided +never+ soon.
+About those lifetime arguments. I wanted to make a near lifetimeless chumsky
+with functions as the primary unit of parsing (like in nom!), then I flomped into madness and now I have this. A near lifetimeless chumsky with functions. Yay.
+** Thank you to
 - [[https://github.com/zesterer][@zesterer]] for amazing work on [[https://github.com/zesterer/chumsky][chumsky]] and help in the Rust Community Discord server
 - All [[https://github.com/rust-bakery/nom][nom]] contributors for their truly inspirational parser combinator framework library
 - [[https://github.com/abs0luty][@abs0luty]] for his help at the early stages of the library and ideas for potential features.
-
-** TO-DO / Roadmap [0/1]
+** TO-DO list / Roadmap [0/2]
+- [-] Full feature parity with chumsky [1/2]
+  - [X] Primitives [4/4]
+    - [X] just (and container types)
+    - [X] filter, filter_map, select
+    - [X] group (renamed to tuple)
+    - [X] choice
+  - [-] All Parser:: functions [2/5]
+    - [X] .or
+    - [X] .map, .to
+    - [ ] .try_map
+    - [ ] .ignored (make parser return ~()~)
+    - [ ] .then (dont implement, useless function), .then_ignore, .ignore_then
 - [ ] Error recovery?
-  Possible solution: uncomment some prototype error recovery code in ParserExtras
-  and ask [[https://github.com/abs0luty][@abs0luty]] and [[https://github.com/zesterer][@zesterer]]

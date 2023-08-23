@@ -2,12 +2,23 @@
 name = "aott"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Aspect Of The Tokens - a parser combinator framework."
+license = "MIT"
+license-file = "LICENSE"
+authors = ["nothendev <borodinov.ilya@gmail.com>", "abs0luty <adisalimgereev@gmail.com>"]
+readme = "_README_markdown.md"
+repository = "https://github.com/Implodent/AOTT"
+keywords = ["parser", "combinator", "token", "syntax"]
+category = ["parsing", "text-processing"]
 
 [dependencies]
 hashbrown = "0.14.0"
 
 [features]
 std = []
-default = ["std"]
+builtin-text = []
+builtin-bytes = []
+default = ["std", "builtin-text"]
+
+[badges]
+maintenance = { status = "actively-developed" }
