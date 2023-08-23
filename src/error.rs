@@ -84,10 +84,10 @@ pub trait Error<I: InputType>: Sized {
                 }
         }
 }
-#[derive(Clone)]
-pub(crate) struct Located<T, E> {
-        pub(crate) pos: T,
-        pub(crate) err: E,
+#[derive(Clone, Debug)]
+pub struct Located<T, E> {
+        pub pos: T,
+        pub err: E,
 }
 
 impl<T, E> Located<T, E> {
@@ -166,7 +166,5 @@ impl<I, O, E> ParseResult<I, O, E> {
         }
 }
 
-pub type IResult<'parse, I, E, O> = (
-        Input<'parse, I, E>,
-        Result<O, <E as ParserExtras<I>>::Error>,
-);
+pub type IResult<'parse, I, E, O> =
+        Result<(Input<'parse, I, E>, O), (Input<'parse, I, E>, <E as ParserExtras<I>>::Error)>;

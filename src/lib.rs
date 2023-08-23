@@ -25,7 +25,7 @@ pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
 impl<'a, T> MaybeRef<'a, T> {
         pub fn borrow_as_t<'b: 'a>(&'b self) -> &'b T {
                 match self {
-                        Self::Ref(r) => *r,
+                        Self::Ref(r) => r,
                         Self::Val(ref v) => v,
                 }
         }

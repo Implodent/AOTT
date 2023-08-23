@@ -91,8 +91,9 @@ pub trait ExactSizeInput: InputType {
 }
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct Errors<T, E> {
-        pub(crate) alt: Option<Located<T, E>>,
+        pub alt: Option<Located<T, E>>,
         pub(crate) secondary: Vec<Located<T, E>>,
 }
 
@@ -142,6 +143,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
 }
 
 // InputRef
+#[derive(Debug)]
 pub struct Input<'parse, I: InputType, E: ParserExtras<I>> {
         #[doc(hidden)]
         pub offset: I::Offset,
@@ -177,7 +179,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         /// # Panics
         /// A parser, if it returns an error, must put the error into input.errors.alt.
         /// If a parser returns Err(()), but there is no error in .errors.alt, a panic happens.
-        pub fn parse<O, P: Parser<I, O, E>>(self, parser: &P) -> (Self, Result<O, E::Error>) {
+        pub fn parse_old<O, P: Parser<I, O, E>>(self, parser: &P) -> (Self, Result<O, E::Error>) {
                 let (this, result) = parser.explode::<Emit>(self);
                 if let Ok(ok) = result {
                         (this, Ok(ok))
@@ -189,6 +191,19 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                                 .expect("returned Err(()) but no alt error. bad parser!")
                                 .err;
                         (this, Err(error))
+                }
+        }
+        /// # Panics
+        /// A parser, if it returns an error, must put the error into input.errors.alt.
+        /// If a parser returns Err(()), but there is no error in .errors.alt, a panic happens.
+        pub fn parse<O, P: Parser<I, O, E>>(
+                self,
+                parser: &P,
+        ) -> Result<(Self, O), (Self, E::Error)> {
+                let (this, result) = self.parse_old(parser);
+                match result {
+                        Ok(ok) => Ok((this, ok)),
+                        Err(err) => Err((this, err)),
                 }
         }
         /// Save the current parse state as a [`Marker`].

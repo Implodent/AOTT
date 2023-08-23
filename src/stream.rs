@@ -13,7 +13,7 @@ impl<I: Iterator> Stream<I> {
         ///
         /// # Example
         ///
-        /// ```
+        /// ```nodoc
         /// # use chumsky::{prelude::*, input::Stream};
         /// let stream = Stream::from_iter((0..10).map(|i| char::from_digit(i, 10).unwrap()));
         ///
@@ -71,7 +71,7 @@ where
 
         #[inline(always)]
         fn prev(offset: Self::Offset) -> Self::Offset {
-                offset - 1 
+                offset - 1
         }
 
         #[inline(always)]

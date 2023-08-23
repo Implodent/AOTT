@@ -7,11 +7,11 @@ use crate::{
         container::OrderedSeq,
         error::{Error, Span},
         input::{Input, InputType},
-        parser::ParserExtras,
+        parser::{Parser, ParserExtras},
         IResult, MaybeRef,
 };
 
-pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token>, E: ParserExtras<I>>(
+pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
         seq: T,
 ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, T>
 where
@@ -30,29 +30,61 @@ where
                                 )),
                         }
                 }) {
-                        (input, Err(err))
+                        Err((input, err))
                 } else {
-                        (input, Ok(seq))
+                        Ok((input, seq.clone()))
                 }
         }
 }
 
+pub fn tuple<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>(
+        tuple: (A, B),
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, (O1, O2)> {
+        move |input| {
+                let (input, result1) = input.parse(&tuple.0)?;
+                let (input, result2) = input.parse(&tuple.1)?;
+                Ok((input, (result1, result2)))
+        }
+}
+
 #[cfg(test)]
-mod tests {
+mod test {
         use crate::{
                 input::InputOwned,
                 parser::{Parser, SimpleExtras},
         };
 
-        use super::just;
+        use super::*;
 
         #[test]
         fn just_parses_a() {
                 let mut input =
                         InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abc");
-                let inp = input.as_ref_at_zero();
-                let parser = just('a');
+                {
+                        let inp = input.as_ref_at_zero();
+                        let parser = just("ab");
 
-                assert_eq!(parser.parse_from_input(inp).output, Some('a'));
+                        let result = parser.parse(inp);
+                        assert!(result.is_ok());
+                        let (input, output) = result.expect("fail");
+                        assert_eq!(&input.input[input.offset..], "c");
+                        assert_eq!(output, "ab");
+                }
+        }
+
+        #[test]
+        fn tuple_parser_a_b() {
+                let mut input =
+                        InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abcd");
+                {
+                        let inp = input.as_ref_at_zero();
+                        let parser = tuple((just("ab"), just("cd")));
+
+                        let result = parser.parse(inp);
+                        assert!(result.is_ok());
+                        let (input, output) = result.expect("fail");
+                        assert_eq!(&input.input[input.offset..], "");
+                        assert_eq!(output, ("ab", "cd"));
+                }
         }
 }

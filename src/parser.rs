@@ -178,16 +178,14 @@ mod private {
 }
 
 pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
-        fn parse_from_input<'parse>(
-                &self,
-                input: Input<'parse, I, E>,
-        ) -> ParseResult<Input<'parse, I, E>, O, <E as ParserExtras<I>>::Error>
+        /// # Errors
+        /// Returns an error if the parser failed.
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O>
         where
                 Self: Sized,
         {
-                ParseResult::single(input.parse(self))
+                input.parse(self)
         }
-
         fn or<P: Parser<I, O, E>>(self, other: P) -> Or<Self, P>
         where
                 Self: Sized,
@@ -246,17 +244,16 @@ impl<
                 O,
                 E: ParserExtras<I>,
                 // only input
-                F: for<'parse> Fn(Input<'parse, I, E>) -> (Input<'parse, I, E>, Result<O, E::Error>),
+                F: for<'parse> Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, O>,
         > Parser<I, O, E> for F
 {
         fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>
         where
                 Self: Sized,
         {
-                let (inp, result) = self(inp);
-                match result {
-                        Ok(ok) => (inp, Ok(M::bind(move || ok))),
-                        Err(err) => {
+                match self(inp) {
+                        Ok((inp, ok)) => (inp, Ok(M::bind(move || ok))),
+                        Err((inp, err)) => {
                                 inp.errors.alt = Some(Located {
                                         pos: inp.offset,
                                         err,
@@ -290,8 +287,11 @@ pub trait ParserExtras<I: InputType> {
         // }
 }
 
-#[derive(Default, Clone, Copy)]
-pub struct SimpleExtras<I, E = Simple<I>>(PhantomData<I>, PhantomData<E>);
+#[derive(Default, Clone, Copy, Debug)]
+pub struct SimpleExtras<I: InputType, E: Error<I> = Simple<<I as InputType>::Token>>(
+        PhantomData<I>,
+        PhantomData<E>,
+);
 
 impl<I: InputType, E: Error<I>> ParserExtras<I> for SimpleExtras<I, E> {
         type Error = E;
