@@ -1,5 +1,5 @@
 * AOTT - Aspect Of The TOKENS
-AOTT is a parser combinator framework / library (guh), which builds on top of chumsky's philosophies, adding a little bit of the nom sauce with functions being the primary unit of parsing (instead of structs like in chumsky).
+AOTT is a PCF / PCL (parser combinator framework / library), which builds on top of chumsky's philosophies, adding a little bit of the nom sauce with functions being the primary unit of parsing (instead of structs like in chumsky).
 ** Thank you:
 - [[https://github.com/zesterer][@zesterer]] for amazing work on [[https://github.com/zesterer/chumsky][chumsky]] and help in the Rust Community Discord server
 - All [[https://github.com/rust-bakery/nom][nom]] contributors for their truly inspirational parser combinator framework library

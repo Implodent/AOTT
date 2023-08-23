@@ -13,6 +13,8 @@ pub mod primitive;
 pub mod stream;
 pub mod text;
 
+pub mod prelude {}
+
 pub use error::IResult;
 
 pub enum Maybe<T, R: Deref<Target = T>> {
@@ -103,7 +105,7 @@ mod sync {
 mod sync {
         use crate::parser::Parser;
 
-        use super::*;
+        use super::alloc;
 
         pub(crate) type RefC<T> = alloc::rc::Rc<T>;
         pub(crate) type RefW<T> = alloc::rc::Weak<T>;

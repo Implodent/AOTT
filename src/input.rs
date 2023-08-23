@@ -1,9 +1,14 @@
+#![allow(dead_code)]
 use core::{
         hash::Hash,
         ops::{Range, RangeFrom},
 };
 
-use crate::{error::Located, parser::*, stream::Stream};
+use crate::{
+        error::Located,
+        parser::{Emit, Parser, ParserExtras, SimpleExtras},
+        stream::Stream,
+};
 
 use self::private::Sealed;
 
@@ -11,6 +16,7 @@ mod private {
         pub trait Sealed {}
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub trait InputType: Sealed {
         #[doc(hidden)]
         type Offset: Copy + Hash + Ord + Into<usize>;
@@ -20,6 +26,10 @@ pub trait InputType: Sealed {
         fn start(&self) -> Self::Offset;
 
         #[doc(hidden)]
+        // # Safety
+        // If `offset` is not strictly the one provided by `Self::start` or returned as the first tuple value from this function,
+        // calling `next` is undefined behavior. It may index memory outside of the desired range, it may segfault, it may panic etc. etc.
+        // Stay safe and don't use this api unless you want to explode.
         unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
 
         #[doc(hidden)]
@@ -144,7 +154,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
 
 // InputRef
 #[derive(Debug)]
-pub struct Input<'parse, I: InputType, E: ParserExtras<I>> {
+pub struct Input<'parse, I: InputType, E: ParserExtras<I> = SimpleExtras<I>> {
         #[doc(hidden)]
         pub offset: I::Offset,
         #[doc(hidden)]
@@ -243,7 +253,14 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
 }
 
+#[derive(Debug)]
 pub struct Marker<I: InputType> {
         offset: I::Offset,
         err_count: usize,
 }
+impl<I: InputType> Clone for Marker<I> {
+        fn clone(&self) -> Self {
+                *self
+        }
+}
+impl<I: InputType> Copy for Marker<I> {}

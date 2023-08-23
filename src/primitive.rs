@@ -5,53 +5,30 @@ use core::borrow::Borrow;
 
 use crate::{
         container::OrderedSeq,
-        error::{Error, Span},
+        error::{Error, Located, Span},
+        explode_extra,
         input::{Input, InputType},
-        parser::{Parser, ParserExtras},
+        parser::{Check, Emit, Mode, PResult, Parser, ParserExtras},
         IResult, MaybeRef,
 };
 
-pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
-        seq: T,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, T>
-where
-        I::Token: Eq + Clone + 'static,
-{
-        move |mut input| {
-                if let Some(err) = seq.seq_iter().find_map(|next| {
-                        let befunge = input.offset;
-                        let next = T::to_maybe_ref(next);
-                        match input.next_inner() {
-                                (_, Some(token)) if next.borrow_as_t() == token.borrow() => None,
-                                (_, found) => Some(Error::expected_token_found_or_eof(
-                                        Span::new_usize(input.span_since(befunge)),
-                                        vec![next.into_clone()],
-                                        found.map(MaybeRef::Val),
-                                )),
-                        }
-                }) {
-                        Err((input, err))
-                } else {
-                        Ok((input, seq.clone()))
-                }
-        }
-}
+mod choice;
+mod filter;
+mod just;
+mod tuple;
 
-pub fn tuple<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>(
-        tuple: (A, B),
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, (O1, O2)> {
-        move |input| {
-                let (input, result1) = input.parse(&tuple.0)?;
-                let (input, result2) = input.parse(&tuple.1)?;
-                Ok((input, (result1, result2)))
-        }
-}
+pub use choice::*;
+pub use filter::*;
+pub use just::just;
+pub use tuple::*;
 
 #[cfg(test)]
 mod test {
         use crate::{
                 input::InputOwned,
                 parser::{Parser, SimpleExtras},
+                select,
+                stream::Stream,
         };
 
         use super::*;
@@ -85,6 +62,78 @@ mod test {
                         let (input, output) = result.expect("fail");
                         assert_eq!(&input.input[input.offset..], "");
                         assert_eq!(output, ("ab", "cd"));
+                }
+        }
+
+        #[test]
+        fn choice_chooses_ab() {
+                let mut input =
+                        InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abcd");
+                {
+                        let inp = input.as_ref_at_zero();
+                        let parser = choice((just("ab"), just("cd")));
+
+                        let result = parser.parse(inp);
+                        assert!(result.is_ok());
+                        let (input, output) = result.expect("fail");
+                        assert_eq!(&input.input[input.offset..], "cd");
+                        assert_eq!(output, "ab");
+                }
+        }
+
+        #[test]
+        fn example_if_statement() {
+                #[derive(Clone, PartialEq, Eq)]
+                enum Token {
+                        KwIf,
+                        KwTrue,
+                        KwFalse,
+                        OpenCurly,
+                        KwPrint,
+                        Str(String),
+                        CloseCurly,
+                }
+                #[derive(Debug)]
+                struct IfStatement {
+                        condition: bool,
+                        print: String,
+                }
+                type Tokens = Stream<<Vec<Token> as IntoIterator>::IntoIter>;
+
+                fn bool(inp: Input<'_, Tokens>) -> IResult<'_, Tokens, SimpleExtras<Tokens>, bool> {
+                        choice((just(Token::KwTrue).to(true), just(Token::KwFalse).to(false)))
+                                .parse(inp)
+                }
+                fn if_statement(
+                        inp: Input<'_, Tokens>,
+                ) -> IResult<'_, Tokens, SimpleExtras<Tokens>, IfStatement> {
+                        tuple((
+                                just(Token::KwIf),
+                                bool,
+                                just(Token::OpenCurly),
+                                just(Token::KwPrint),
+                                select!(Token::Str(str) => str),
+                                just(Token::CloseCurly),
+                        ))
+                        .map(|(_, condition, _, _, print, _)| IfStatement { condition, print })
+                        .parse(inp)
+                }
+                let tokens = vec![
+                        Token::KwIf,
+                        Token::KwFalse,
+                        Token::OpenCurly,
+                        Token::KwPrint,
+                        Token::Str(String::from("hello world!")),
+                        Token::CloseCurly,
+                ];
+                let mut input = InputOwned::from_input(Stream::from_iter(tokens));
+                {
+                        let inp = input.as_ref_at_zero();
+                        let Ok((_, output)) = inp.parse(&if_statement) else {
+                                panic!("test fail")
+                        };
+                        assert!(!output.condition);
+                        assert_eq!(output.print, "hello world!");
                 }
         }
 }
