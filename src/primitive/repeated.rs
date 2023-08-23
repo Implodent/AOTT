@@ -1,9 +1,19 @@
+use core::marker::PhantomData;
+
+use crate::input::SliceInput;
+
 use super::*;
 
 #[derive(Copy, Clone)]
-pub struct Repeated<P>(P);
+pub struct Repeated<P, O, V: FromIterator<O>>(
+        pub(crate) P,
+        pub(crate) PhantomData<O>,
+        pub(crate) PhantomData<V>,
+);
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, Vec<O>, E> for Repeated<P> {
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, V: FromIterator<O>>
+        Parser<I, Vec<O>, E> for Repeated<P, O, V>
+{
         fn explode<'parse, M: Mode>(
                 &self,
                 mut inp: Input<'parse, I, E>,
@@ -49,4 +59,35 @@ impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, Vec<O>, 
         ) -> PResult<'parse, I, E, Emit, Vec<O>> {
                 self.explode::<Emit>(inp)
         }
+}
+
+pub struct Slice<'a, I, E, O, P>(P, PhantomData<&'a (I, O, E)>);
+
+impl<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser<I, O, E>>
+        Parser<I, I::Slice, E> for Slice<'a, I, E, O, P>
+{
+        fn explode<'parse, M: Mode>(
+                &self,
+                inp: Input<'parse, I, E>,
+        ) -> PResult<'parse, I, E, M, I::Slice>
+        where
+                Self: Sized,
+        {
+                let start = inp.offset;
+                let (inp, out) = self.0.explode_check(inp);
+                if let Err(()) = out {
+                        return (inp, Err(()));
+                }
+
+                let slice = inp.input.slice(inp.span_since(start));
+                (inp, Ok(M::bind(|| slice)))
+        }
+
+        explode_extra!(I::Slice);
+}
+
+pub fn slice<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser<I, O, E>>(
+        parser: P,
+) -> Slice<'a, I, E, O, P> {
+        Slice(parser, PhantomData)
 }

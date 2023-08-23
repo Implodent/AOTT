@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use crate::{
         error::{Error, Located, Simple},
         explode_extra,
-        input::{Input, InputType},
+        input::{Input, InputType, SliceInput},
         primitive::*,
         sync::RefC,
         *,
@@ -220,6 +220,25 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Self: Sized,
         {
                 FilterParser(self, f, PhantomData)
+        }
+        fn repeated(self) -> Repeated<Self, O, Vec<O>>
+        where
+                Self: Sized,
+        {
+                Repeated(self, PhantomData, PhantomData)
+        }
+        fn repeated_custom<V: FromIterator<O>>(self) -> Repeated<Self, O, V>
+        where
+                Self: Sized,
+        {
+                Repeated(self, PhantomData, PhantomData)
+        }
+        fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
+        where
+                I: SliceInput<'a>,
+                Self: Sized,
+        {
+                slice(self)
         }
         #[doc(hidden)]
         fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>

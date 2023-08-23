@@ -217,6 +217,24 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                         Err(err) => Err((this, err)),
                 }
         }
+
+        pub fn check<O, P: Parser<I, O, E>>(
+                self,
+                parser: &P,
+        ) -> Result<(Self, ()), (Self, E::Error)> {
+                match parser.explode_check(self) {
+                        (this, Ok(())) => Ok((this, ())),
+                        (this, Err(())) => {
+                                let error = this
+                                        .errors
+                                        .alt
+                                        .take()
+                                        .expect("returned Err(()) but no alt error. bad parser!")
+                                        .err;
+                                Err((this, error))
+                        }
+                }
+        }
         /// Save the current parse state as a [`Marker`].
         ///
         /// You can rewind back to this state later with [`InputRef::rewind`].
