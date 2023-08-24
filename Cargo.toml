@@ -21,3 +21,10 @@ default = ["std", "builtin-text"]
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[dev-dependencies]
+zstd-safe = {version ="6.0.6", features=["std"]}
+
+[[example]]
+name = "nbt"
+required-features = ["builtin-bytes"]

@@ -7,6 +7,8 @@ extern crate alloc;
 
 use core::mem::MaybeUninit;
 use core::ops::Deref;
+// #[cfg(feature = "builtin-bytes")]
+pub mod bytes;
 pub mod container;
 pub mod error;
 pub mod input;

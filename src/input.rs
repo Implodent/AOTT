@@ -5,7 +5,7 @@ use core::{
 };
 
 use crate::{
-        error::Located,
+        error::{Error, Located, Span},
         parser::{Emit, Parser, ParserExtras, SimpleExtras},
         stream::Stream,
         text::Char,
@@ -269,6 +269,17 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         #[inline(always)]
         pub fn span_since(&self, before: I::Offset) -> Range<I::Offset> {
                 before..self.offset
+        }
+        #[inline(always)]
+        pub fn next_or_eof(&mut self) -> Result<I::Token, E::Error> {
+                let befunge = self.offset;
+                match self.next_inner() {
+                        (_, Some(token)) => Ok(token),
+                        (offset, None) => Err(Error::unexpected_eof(
+                                Span::new_usize(self.span_since(self.offset)),
+                                None,
+                        )),
+                }
         }
 }
 

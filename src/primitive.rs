@@ -1,7 +1,10 @@
 // just, filter, end, nothing, one_of, none_of, separated_by, filter_map,
 // select!, take, take_while, take_while_bounded
 
-use core::borrow::Borrow;
+use core::{
+        borrow::Borrow,
+        ops::{Range, RangeBounds},
+};
 
 use crate::{
         container::OrderedSeq,
@@ -17,6 +20,7 @@ mod filter;
 mod just;
 mod map;
 mod repeated;
+mod take;
 mod tuple;
 
 pub use choice::*;
@@ -24,21 +28,18 @@ pub use filter::*;
 pub use just::just;
 pub use map::*;
 pub use repeated::*;
+pub use take::*;
 pub use tuple::*;
 
 pub fn any<I: InputType, E: ParserExtras<I>>(
         mut input: Input<'_, I, E>,
 ) -> IResult<'_, I, E, I::Token> {
         let befunge = input.offset;
-        match input.next() {
-                Some(token) => Ok((input, token)),
-                None => {
-                        let err = Error::unexpected_eof(
-                                Span::new_usize(input.span_since(befunge)),
-                                None,
-                        );
-                        Err((input, err))
-                }
+        if let Some(token) = input.next() {
+                Ok((input, token))
+        } else {
+                let err = Error::unexpected_eof(Span::new_usize(input.span_since(befunge)), None);
+                Err((input, err))
         }
 }
 
