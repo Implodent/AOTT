@@ -1,15 +1,16 @@
-use std::{mem::size_of, ptr::addr_of};
+use std::{collections::HashMap, mem::size_of, ptr::addr_of};
 
 use aott::{
         bytes::number::*,
         input::Input,
         parser::{Parser, SimpleExtras},
         primitive::{filter, take, take_exact},
+        sync::{RefC, SyncArray},
         IResult,
 };
 use zstd_safe::ErrorCode;
 
-fn zstd(bytes: &[u8]) -> Result<Vec<u8>, ErrorCode> {
+pub fn zstd(bytes: &[u8]) -> Result<Vec<u8>, ErrorCode> {
         let mut vec = vec![];
         zstd_safe::decompress(&mut vec, bytes).map(|_| vec)
 }
@@ -76,14 +77,22 @@ impl NbtTag {
 }
 
 #[derive(Debug, Clone)]
-struct RawNbt {
-        tag: NbtTag,
-        name: String,
-        length: usize,
-        payload: Vec<u8>,
+enum Nbt {
+        Byte(i8),
+        Short(i16),
+        Int(i32),
+        Long(i64),
+        Float(f32),
+        Double(f64),
+        ByteArray(SyncArray<i8>),
+        IntArray(SyncArray<i32>),
+        LongArray(SyncArray<i64>),
+        String(RefC<str>),
+        List(Vec<Nbt>),
+        Compound(HashMap<String, Nbt>),
 }
 
-fn raw_nbt<'a, 'input>(
+fn nbt<'a, 'input>(
         input: Input<'input, &'a [u8]>,
 ) -> IResult<'input, &'a [u8], SimpleExtras<&'a [u8]>, RawNbt> {
         let (input, tag) = filter(|n: &u8| *n < 12)

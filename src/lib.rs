@@ -7,7 +7,7 @@ extern crate alloc;
 
 use core::mem::MaybeUninit;
 use core::ops::Deref;
-// #[cfg(feature = "builtin-bytes")]
+#[cfg(feature = "builtin-bytes")]
 pub mod bytes;
 pub mod container;
 pub mod error;
@@ -15,6 +15,10 @@ pub mod input;
 pub mod parser;
 pub mod primitive;
 pub mod stream;
+#[cfg(feature = "derive")]
+pub use aott_derive as derive;
+#[cfg(feature = "derive")]
+pub use derive::*;
 
 #[cfg(feature = "builtin-text")]
 pub mod text;
@@ -95,12 +99,14 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
 
 #[cfg(feature = "sync")]
 #[allow(dead_code)]
-mod sync {
+#[doc(hidden)]
+pub mod sync {
         use super::*;
 
         pub(crate) type RefC<T> = alloc::sync::Arc<T>;
         pub(crate) type RefW<T> = alloc::sync::Weak<T>;
         pub(crate) type DynParser<'a, 'b, I, O, E> = dyn Parser<'a, I, O, E> + Send + Sync + 'b;
+        pub type SyncArray<T> = alloc::sync::Arc<[T]>;
 
         /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
         /// enabled. Used to constrain API usage succinctly and easily.
@@ -109,15 +115,17 @@ mod sync {
 }
 
 #[cfg(not(feature = "sync"))]
+#[doc(hidden)]
 #[allow(dead_code)]
-mod sync {
+pub mod sync {
         use crate::parser::Parser;
 
         use super::alloc;
 
-        pub(crate) type RefC<T> = alloc::rc::Rc<T>;
-        pub(crate) type RefW<T> = alloc::rc::Weak<T>;
-        pub(crate) type DynParser<'b, I, O, E> = dyn Parser<I, O, E> + 'b;
+        pub type RefC<T> = alloc::rc::Rc<T>;
+        pub type RefW<T> = alloc::rc::Weak<T>;
+        pub type DynParser<'b, I, O, E> = dyn Parser<I, O, E> + 'b;
+        pub type SyncArray<T> = alloc::rc::Rc<[T]>;
 
         /// A trait that requires either nothing or `Send` and `Sync` bounds depending on whether the `sync` feature is
         /// enabled. Used to constrain API usage succinctly and easily.

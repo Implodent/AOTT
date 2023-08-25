@@ -12,12 +12,14 @@ categories = ["parsing", "text-processing"]
 
 [dependencies]
 hashbrown = "0.14.0"
+aott_derive = { path = "./derive", optional = true }
 
 [features]
 std = []
 builtin-text = []
 builtin-bytes = []
-default = ["std", "builtin-text"]
+derive = ["dep:aott_derive"]
+default = ["std", "builtin-text", "derive"]
 
 [badges]
 maintenance = { status = "actively-developed" }
