@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use crate::{
-        error::{Error, Located, Simple},
+        error::{Error, Located, ParseResult, Simple},
         explode_extra,
         input::{Input, InputType, SliceInput},
         primitive::*,
@@ -185,6 +185,14 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 input.parse(self)
         }
+        /// # Errors
+        /// Returns an error if the parser failed.
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()>
+        where
+                Self: Sized,
+        {
+                input.check(self)
+        }
         fn or<P: Parser<I, O, E>>(self, other: P) -> Or<Self, P>
         where
                 Self: Sized,
@@ -295,20 +303,22 @@ pub trait ParserExtras<I: InputType> {
         type Context;
         // type State;
 
-        // fn recover<O>(
-        //     _error: Self::Error,
-        //     _context: Self::Context,
-        //     input: I,
-        //     prev_output: Option<O>,
-        //     prev_errors: Vec<Self::Error>,
-        // ) -> ParseResult<I, O, Self::Error> {
-        //     // default: noop
-        //     ParseResult {
-        //         input,
-        //         output: prev_output,
-        //         errors: prev_errors,
-        //     }
-        // }
+        fn recover<O>(
+                // Errors.alt
+                _error: Self::Error,
+                _context: Self::Context,
+                input: I,
+                prev_output: Option<O>,
+                // Errors.secondary
+                prev_errors: Vec<Self::Error>,
+        ) -> ParseResult<I, O, Self::Error> {
+                // default: noop
+                ParseResult {
+                        input,
+                        output: prev_output,
+                        errors: prev_errors,
+                }
+        }
 }
 
 #[derive(Default, Clone, Copy, Debug)]

@@ -18,8 +18,9 @@ aott_derive = { path = "./derive", optional = true }
 std = []
 builtin-text = []
 builtin-bytes = []
+error-recovery = []
 derive = ["dep:aott_derive"]
-default = ["std", "builtin-text", "derive"]
+default = ["std", "builtin-text", "derive", "error-recovery"]
 
 [badges]
 maintenance = { status = "actively-developed" }

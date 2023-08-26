@@ -14,6 +14,8 @@ pub mod error;
 pub mod input;
 pub mod parser;
 pub mod primitive;
+#[cfg(feature = "error-recovery")]
+pub mod recovery;
 pub mod stream;
 #[cfg(feature = "derive")]
 pub use aott_derive as derive;

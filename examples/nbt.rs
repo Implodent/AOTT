@@ -2,6 +2,7 @@ use std::{collections::HashMap, mem::size_of, ptr::addr_of};
 
 use aott::{
         bytes::number::*,
+        derive::parser,
         input::Input,
         parser::{Parser, SimpleExtras},
         primitive::{filter, take, take_exact},
@@ -92,9 +93,8 @@ enum Nbt {
         Compound(HashMap<String, Nbt>),
 }
 
-fn nbt<'a, 'input>(
-        input: Input<'input, &'a [u8]>,
-) -> IResult<'input, &'a [u8], SimpleExtras<&'a [u8]>, RawNbt> {
+#[parser(extras = SimpleExtras)]
+fn nbt(input: &[u8]) -> Nbt {
         let (input, tag) = filter(|n: &u8| *n < 12)
                 .map(|n| NbtTag::from_u8(n).unwrap())
                 .parse(input)?;

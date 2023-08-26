@@ -20,7 +20,8 @@ pub trait Container<T>: Default {
         /// Create a container, attempting to pre-allocate enough space for `n` items.
         ///
         /// Failure to do so is not a problem, the size is only a hint.
-        #[must_use] fn with_capacity(n: usize) -> Self {
+        #[must_use]
+        fn with_capacity(n: usize) -> Self {
                 let _ = n;
                 Self::default()
         }

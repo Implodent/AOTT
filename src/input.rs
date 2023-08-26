@@ -105,7 +105,7 @@ pub trait ExactSizeInput: InputType {
 #[derive(Debug)]
 pub struct Errors<T, E> {
         pub alt: Option<Located<T, E>>,
-        pub(crate) secondary: Vec<Located<T, E>>,
+        pub secondary: Vec<Located<T, E>>,
 }
 
 impl<T, E> Default for Errors<T, E> {
