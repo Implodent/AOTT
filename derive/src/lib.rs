@@ -1,3 +1,9 @@
+//! do not read till the end if you want to keep your sanity.
+//! please.
+//! i beg you.
+//! WARNING: unformatted shitcode ahead.
+//! fix PRs accepted.
+
 use proc_macro::TokenStream as TS;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
@@ -5,9 +11,8 @@ use syn::{
         parse::{Parse, Parser},
         punctuated::Punctuated,
         token::Comma,
-        AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, FnArg, GenericArgument,
-        GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, LitBool, Meta, MetaNameValue, PatIdent,
-        PatType, Path, PathArguments, PathSegment, ReturnType, Type, TypePath,
+        AngleBracketedGenericArguments, Expr, ExprPath, FnArg, GenericArgument,
+        GenericParam, ItemFn, Lifetime, LifetimeParam, Meta, MetaNameValue, Path, PathArguments, PathSegment, ReturnType, Type, TypePath,
 };
 
 // example usage:
@@ -25,7 +30,7 @@ pub fn parser(args: TS, ts: TS) -> TS {
         let ts: TokenStream = ts.into();
 
         parser_impl(args.into(), ts)
-                .map_or_else(|e| e.to_compile_error(), |t| Into::<TokenStream>::into(t))
+                .map_or_else(|e| e.to_compile_error(), Into::<TokenStream>::into)
                 .into()
 }
 
@@ -43,7 +48,7 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
         let parse_lifetime = Lifetime::new("'__aott_parse", Span::call_site());
         let mut lifetimes = vec![parse_lifetime.clone()];
         let mut inputs = vec![];
-        for inp in f.sig.inputs.into_iter() {
+        for inp in f.sig.inputs {
                 match inp {
                         FnArg::Receiver(_) => {}
                         FnArg::Typed(mut pat) => {
