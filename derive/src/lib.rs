@@ -11,8 +11,9 @@ use syn::{
         parse::{Parse, Parser},
         punctuated::Punctuated,
         token::Comma,
-        AngleBracketedGenericArguments, Expr, ExprPath, FnArg, GenericArgument,
-        GenericParam, ItemFn, Lifetime, LifetimeParam, Meta, MetaNameValue, Path, PathArguments, PathSegment, ReturnType, Type, TypePath,
+        AngleBracketedGenericArguments, Expr, ExprPath, FnArg, GenericArgument, GenericParam,
+        ItemFn, Lifetime, LifetimeParam, Meta, MetaNameValue, Path, PathArguments, PathSegment,
+        ReturnType, Type, TypePath,
 };
 
 // example usage:

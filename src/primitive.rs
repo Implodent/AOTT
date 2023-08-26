@@ -1,10 +1,7 @@
 // just, filter, end, nothing, one_of, none_of, separated_by, filter_map,
 // select!, take, take_while, take_while_bounded
 
-use core::{
-        borrow::Borrow,
-        ops::{Range, RangeBounds},
-};
+use core::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,
@@ -23,6 +20,7 @@ mod repeated;
 mod take;
 mod tuple;
 
+use aott_derive::parser;
 pub use choice::*;
 pub use filter::*;
 pub use just::just;
@@ -31,15 +29,13 @@ pub use repeated::*;
 pub use take::*;
 pub use tuple::*;
 
-pub fn any<I: InputType, E: ParserExtras<I>>(
-        mut input: Input<'_, I, E>,
-) -> IResult<'_, I, E, I::Token> {
-        let befunge = input.offset;
-        if let Some(token) = input.next() {
-                Ok((input, token))
-        } else {
-                let err = Error::unexpected_eof(Span::new_usize(input.span_since(befunge)), None);
-                Err((input, err))
+#[parser(extras = E)]
+/// # Errors
+/// This function returns an error if end of file is reached.
+pub fn any<I: InputType, E: ParserExtras<I>>(mut input: I) -> I::Token {
+        match input.next_or_eof() {
+                Ok(ok) => Ok((input, ok)),
+                Err(err) => Err((input, err)),
         }
 }
 

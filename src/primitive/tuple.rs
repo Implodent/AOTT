@@ -1,6 +1,49 @@
 use super::*;
 
-/// See [`group`].
+#[derive(Copy, Clone)]
+pub struct Then<A, B>(pub(crate) A, pub(crate) B);
+impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
+        Parser<I, (O1, O2), E> for Then<A, B>
+{
+        fn explode<'parse, M: Mode>(
+                &self,
+                inp: Input<'parse, I, E>,
+        ) -> PResult<'parse, I, E, M, (O1, O2)>
+        where
+                Self: Sized,
+        {
+                match self.0.explode_emit(inp) {
+                        (inp, Ok(o1)) => match self.1.explode_emit(inp) {
+                                (inp, Ok(o2)) => (inp, Ok(M::bind(|| (o1, o2)))),
+                                (inp, Err(())) => (inp, Err(())),
+                        },
+                        (inp, Err(())) => (inp, Err(())),
+                }
+        }
+
+        fn explode_check<'parse>(
+                &self,
+                inp: Input<'parse, I, E>,
+        ) -> PResult<'parse, I, E, Check, (O1, O2)> {
+                let (inp, res) = self.0.explode_check(inp);
+                if let Err(()) = res {
+                        return (inp, Err(()));
+                }
+                let (inp, res) = self.1.explode_check(inp);
+                if let Err(()) = res {
+                        return (inp, Err(()));
+                }
+                (inp, Ok(()))
+        }
+        fn explode_emit<'parse>(
+                &self,
+                inp: Input<'parse, I, E>,
+        ) -> PResult<'parse, I, E, Emit, (O1, O2)> {
+                self.explode::<Emit>(inp)
+        }
+}
+
+/// See [`tuple`].
 #[derive(Copy, Clone)]
 pub struct Tuple<T> {
         parsers: T,

@@ -248,6 +248,12 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 slice(self)
         }
+        fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<Self, P>
+        where
+                Self: Sized,
+        {
+                Then(self, other)
+        }
         #[doc(hidden)]
         fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O>
         where

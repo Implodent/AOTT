@@ -1,0 +1,23 @@
+* aott recovery api
+warning: contributor only docs ahead. you might become insane from this amount of knowledge that is not desired to be known. count me an alternate for telling you that. i have warned you.
+
+** builtin strategies
+*** noop
+return parseresult as is
+*** unoptimized regex explod
+
+*** skip single
+skips a single token, tries again
+*** skip till ~A~
+from ~cfg~ it could deduce what could it parse next, let's call that parser ~A~.
+then, in the case of an error, it tries calling ~A~ (in Check mode),
+before it reaches a point where it could realistically parse ~A~ (and parses it).
+example:
+- parsing a function item fails.
+- knowing that the contents of a file can be Vec<FunctionItem>, it tries to parse the next function.
+  if it succeeds, it still adds the error to the errors, but also returns the recovered AST.
+
+** Parser::recover_with(cfg) -> ParseResult
+where ~cfg~ is the value of type ParserExtras::RecoveryConfig + Clone
+
+it calls ParserExtras::recover(cfg, error, context, state, prev_output, prev_errors)
