@@ -46,7 +46,7 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                 }) if path.is_ident(&Ident::new("extras", Span::call_site())) => Some(ext.clone()),
                 _ => None,
         });
-        let parse_lifetime = Lifetime::new("'__aott_parse", Span::call_site());
+        let parse_lifetime = Lifetime::new("'parse", Span::call_site());
         let mut lifetimes = vec![parse_lifetime.clone()];
         let mut inputs = vec![];
         for inp in f.sig.inputs {
@@ -57,7 +57,7 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                                         Type::Reference(mut r) => {
                                                 if r.lifetime.is_none() {
                                                         let lifetime = Lifetime::new(
-                                                                "'__aott_arg",
+                                                                "'a",
                                                                 Span::call_site(),
                                                         );
                                                         r.lifetime = Some(lifetime.clone());

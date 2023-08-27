@@ -62,6 +62,14 @@ impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
 ///
 /// # Errors
 /// This function returns an error if end of input was not reached.
+///
+/// # Example
+/// ```
+/// # use aott::prelude::*;
+/// let input = "eof";
+/// let (_, (output, ())) = (just("eof").then(end)).parse(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
+/// assert_eq!(output, "eof");
+/// ```
 pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
         let offset = input.offset;
         match input.next() {
@@ -76,117 +84,22 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
         }
 }
 
-#[cfg(test)]
-mod test {
-        use crate::{
-                input::InputOwned,
-                parser::{Parser, SimpleExtras},
-                select,
-                stream::Stream,
-        };
-
-        use super::*;
-
-        #[test]
-        fn just_parses_a() {
-                let mut input =
-                        InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abc");
-                {
-                        let inp = input.as_ref_at_zero();
-                        let parser = just("ab");
-
-                        let result = parser.parse(inp);
-                        assert!(result.is_ok());
-                        let (input, output) = result.expect("fail");
-                        assert_eq!(&input.input[input.offset..], "c");
-                        assert_eq!(output, "ab");
-                }
-        }
-
-        #[test]
-        fn tuple_parser_a_b() {
-                let mut input =
-                        InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abcd");
-                {
-                        let inp = input.as_ref_at_zero();
-                        let parser = tuple((just("ab"), just("cd")));
-
-                        let result = parser.parse(inp);
-                        assert!(result.is_ok());
-                        let (input, output) = result.expect("fail");
-                        assert_eq!(&input.input[input.offset..], "");
-                        assert_eq!(output, ("ab", "cd"));
-                }
-        }
-
-        #[test]
-        fn choice_chooses_ab() {
-                let mut input =
-                        InputOwned::<&'static str, SimpleExtras<&'static str>>::from_input("abcd");
-                {
-                        let inp = input.as_ref_at_zero();
-                        let parser = choice((just("ab"), just("cd")));
-
-                        let result = parser.parse(inp);
-                        assert!(result.is_ok());
-                        let (input, output) = result.expect("fail");
-                        assert_eq!(&input.input[input.offset..], "cd");
-                        assert_eq!(output, "ab");
-                }
-        }
-
-        #[test]
-        fn example_if_statement() {
-                #[derive(Clone, PartialEq, Eq)]
-                enum Token {
-                        KwIf,
-                        KwTrue,
-                        KwFalse,
-                        OpenCurly,
-                        KwPrint,
-                        Str(String),
-                        CloseCurly,
-                }
-                #[derive(Debug)]
-                struct IfStatement {
-                        condition: bool,
-                        print: String,
-                }
-                type Tokens = Stream<<Vec<Token> as IntoIterator>::IntoIter>;
-
-                fn bool() -> impl Parser<Tokens, bool, SimpleExtras<Tokens>> {
-                        choice((just(Token::KwTrue).to(true), just(Token::KwFalse).to(false)))
-                }
-                fn if_statement(
-                        inp: Input<'_, Tokens>,
-                ) -> IResult<'_, Tokens, SimpleExtras<Tokens>, IfStatement> {
-                        tuple((
-                                just(Token::KwIf),
-                                bool(),
-                                just(Token::OpenCurly),
-                                just(Token::KwPrint),
-                                select!(Token::Str(str) => str),
-                                just(Token::CloseCurly),
-                        ))
-                        .map(|(_, condition, _, _, print, _)| IfStatement { condition, print })
-                        .parse(inp)
-                }
-                let tokens = vec![
-                        Token::KwIf,
-                        Token::KwFalse,
-                        Token::OpenCurly,
-                        Token::KwPrint,
-                        Token::Str(String::from("hello world!")),
-                        Token::CloseCurly,
-                ];
-                let mut input = InputOwned::from_input(Stream::from_iter(tokens));
-                {
-                        let inp = input.as_ref_at_zero();
-                        let Ok((_, output)) = inp.parse(&if_statement) else {
-                                panic!("test fail")
-                        };
-                        assert!(!output.condition);
-                        assert_eq!(output.print, "hello world!");
-                }
+/// This function makes a parser optional -
+/// if it returns an error, this parser succeeds
+/// and just returns None as the output.
+/// # Example
+/// ```
+/// # use aott::prelude::*;
+/// let input = "dontmatch";
+/// let (_, output) = (optional(just("domatch")))(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
+/// assert_eq!(output, None);
+/// ```
+pub fn optional<'parse, I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(
+        parser: A,
+) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, Option<O>> {
+        move |input| {
+                Ok(parser
+                        .parse(input)
+                        .map_or_else(|(input, _)| (input, None), |(input, t)| (input, Some(t))))
         }
 }

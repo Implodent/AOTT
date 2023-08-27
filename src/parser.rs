@@ -186,6 +186,27 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Or(self, other)
         }
+
+        /// Transforms this parser's output with the `mapper` function.
+        /// The `mapper` function cannot return an error. If you want to, consider using [`Parser::try_map`]
+        ///
+        /// # Example
+        /// ```
+        /// # use aott::prelude::*;
+        /// let input = "hisnameisjuan";
+        /// #[parser]
+        /// fn parser(input: &str) -> (&'a str, &'a str) {
+        ///     tuple((
+        ///         choice((just("his"), just("her"))),
+        ///         just("name"), just("is"),
+        ///         any.repeated().slice(),
+        ///         end
+        ///     )).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse(input)
+        /// }
+        /// let (_, (pronoun, name)) = parser(Input::new(&input)).unwrap();
+        /// assert_eq!(pronoun, "his");
+        /// assert_eq!(name, "juan");
+        /// ```
         fn map<U, F: Fn(O) -> U>(self, mapper: F) -> Map<Self, O, F, U>
         where
                 Self: Sized,
