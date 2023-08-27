@@ -1,6 +1,6 @@
 use core::{mem::MaybeUninit, ops::RangeTo};
 
-use crate::{sync::MaybeSync, MaybeUninitExt};
+use crate::MaybeUninitExt;
 
 use super::*;
 
@@ -65,48 +65,29 @@ pub struct TakeExact<const A: usize>(usize);
 impl<I: InputType, E: ParserExtras<I>, const A: usize> Parser<I, [I::Token; A], E>
         for TakeExact<A>
 {
-        fn explode<'parse, M: Mode>(
+        fn parse<'parse>(
                 &self,
-                mut input: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, M, [I::Token; A]> {
-                let mut result = MaybeUninitExt::<I::Token>::uninit_array::<A>();
-                for r in &mut result {
-                        match input.next_or_eof() {
-                                Ok(ok) => *r = MaybeUninit::new(ok),
-                                Err(err) => {
-                                        input.errors.alt = Some(Located::at(input.offset, err));
-                                        return (input, Err(()));
-                                }
-                        }
+                mut inp: Input<'parse, I, E>,
+        ) -> IResult<'parse, I, E, [I::Token; A]> {
+                let mut result: [MaybeUninit<I::Token>; A] = MaybeUninitExt::uninit_array();
+
+                for i in 0..A {
+                        result[i] = MaybeUninit::new(match inp.next_or_eof() {
+                                Ok(ok) => ok,
+                                Err(e) => return Err((inp, e)),
+                        });
                 }
-                (
-                        input,
-                        Ok(M::bind(|| unsafe {
-                                // SAFETY: we assume init because for each element of result, we initialized it
-                                MaybeUninitExt::array_assume_init(result)
-                        })),
-                )
+
+                Ok((inp, unsafe { MaybeUninitExt::array_assume_init(result) }))
         }
-        fn explode_emit<'parse>(
-                &self,
-                input: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Emit, [I::Token; A]> {
-                self.explode::<Emit>(input)
-        }
-        fn explode_check<'parse>(
-                &self,
-                mut input: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Check, [I::Token; A]> {
+        fn check<'parse>(&self, mut inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
                 for _ in 0..A {
-                        match input.next_or_eof() {
-                                Ok(_) => (),
-                                Err(err) => {
-                                        input.errors.alt = Some(Located::at(input.offset, err));
-                                        return (input, Err(()));
-                                }
+                        if let Err(e) = inp.next_or_eof() {
+                                return Err((inp, e));
                         }
                 }
-                (input, Ok(()))
+
+                Ok((inp, ()))
         }
 }
 

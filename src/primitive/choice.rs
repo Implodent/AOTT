@@ -63,7 +63,7 @@ macro_rules! impl_choice_for_tuple {
         impl_choice_for_tuple!(~ $head $($X)*);
     };
     (~ $Head:ident $($X:ident)+) => {
-        #[allow(unused_variables, non_snake_case)]
+        #[allow(unused_variables, non_snake_case, unused_assignments)]
         impl<I, E, $Head, $($X),*, O> Parser<I, O, E> for Choice<($Head, $($X,)*)>
         where
             I: InputType,
@@ -72,27 +72,48 @@ macro_rules! impl_choice_for_tuple {
             $($X: Parser<I, O, E>),*
         {
             #[inline]
-            fn explode<'parse, M: Mode>(&self, mut inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O> {
+            fn parse<'parse>(&self, mut inp: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+                let mut error: E::Error;
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                match $Head.explode::<M>(inp) {
-                        (inp, Ok(out)) => return (inp, Ok(out)),
-                        (input, Err(())) => { inp = input; inp.rewind(before) },
+                match $Head.parse(inp) {
+                        Ok((inp, out)) => return Ok((inp, out)),
+                        Err((input, e)) => { inp = input; inp.rewind(before); error = e; },
                 }
 
                 $(
-                    match $X.explode::<M>(inp) {
-                        (inp, Ok(out)) => return (inp, Ok(out)),
-                        (input, Err(())) => { inp = input; inp.rewind(before) },
+                    match $X.parse(inp) {
+                        Ok((inp, out)) => return Ok((inp, out)),
+                        Err((input, e)) => { inp = input; inp.rewind(before); error = e; },
                     }
                 )*
 
-                (inp, Err(()))
+                Err((inp, error))
+            }
+            #[inline]
+            fn check<'parse>(&self, mut inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let mut error: E::Error;
+                let before = inp.save();
+
+                let Choice { parsers: ($Head, $($X,)*), .. } = self;
+
+                match $Head.check(inp) {
+                        Ok((inp, out)) => return Ok((inp, out)),
+                        Err((input, e)) => { inp = input; inp.rewind(before); error = e; },
+                }
+
+                $(
+                    match $X.check(inp) {
+                        Ok((inp, out)) => return Ok((inp, out)),
+                        Err((input, e)) => { inp = input; inp.rewind(before); error = e; },
+                    }
+                )*
+
+                Err((inp, error))
             }
 
-            explode_extra!(O);
         }
     };
     (~ $Head:ident) => {
@@ -103,95 +124,16 @@ macro_rules! impl_choice_for_tuple {
             $Head:  Parser<I, O, E>,
         {
             #[inline]
-            fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, O> {
-                self.parsers.0.explode::<M>(inp)
+            fn parse<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+                self.parsers.0.parse(inp)
             }
 
-            explode_extra!(O);
+            #[inline]
+            fn check<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                self.parsers.0.check(inp)
+            }
         }
     };
 }
 
 impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ T_ U_ V_ W_ X_ Y_ Z_);
-
-impl<'b, A, I, O, E> Parser<I, O, E> for Choice<&'b [A]>
-where
-        A: Parser<I, O, E>,
-        I: InputType,
-        E: ParserExtras<I>,
-{
-        #[inline]
-        fn explode<'parse, M: Mode>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, M, O> {
-                if self.parsers.is_empty() {
-                        let offs = inp.offset;
-                        let err_span = inp.span_since(offs);
-                        inp.errors.alt = Some(Located {
-                                pos: offs,
-                                err: Error::unexpected_eof(
-                                        <<E::Error as Error<I>>::Span as Span>::new_usize(err_span),
-                                        None,
-                                ),
-                        });
-                        (inp, Err(()))
-                } else {
-                        let _before = inp.save();
-                        // match self.parsers.iter().find_map(|parser| {
-                        //         inp.rewind(before);
-                        //         match parser.explode::<M>(inp) {
-                        //                 (inp, Ok(out)) => (inp, Some(out)),
-                        //                 (inp, Err(())) => (inp, None),
-                        //         }
-                        // }) {
-                        //         (inp, Some(out)) => (inp, Ok(out)),
-                        //         (inp, None) => (inp, Err(())),
-                        // }
-
-                        let iter = self.parsers.iter();
-                        let mut i = inp;
-                        for parser in iter {
-                                match parser.explode::<M>(i) {
-                                        (inp, Ok(out)) => return (inp, Ok(out)),
-                                        (inp, Err(())) => i = inp,
-                                }
-                        }
-                        (i, Err(()))
-                }
-        }
-
-        explode_extra!(O);
-}
-
-impl<A, I, O, E> Parser<I, O, E> for Choice<Vec<A>>
-where
-        A: Parser<I, O, E>,
-        I: InputType,
-        E: ParserExtras<I>,
-{
-        #[inline]
-        fn explode<'parse, M: Mode>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, M, O> {
-                choice(&self.parsers[..]).explode::<M>(inp)
-        }
-        explode_extra!(O);
-}
-
-impl<A, I, O, E, const N: usize> Parser<I, O, E> for Choice<[A; N]>
-where
-        A: Parser<I, O, E>,
-        I: InputType,
-        E: ParserExtras<I>,
-{
-        #[inline]
-        fn explode<'parse, M: Mode>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, M, O> {
-                choice(&self.parsers[..]).explode::<M>(inp)
-        }
-        explode_extra!(O);
-}

@@ -5,10 +5,9 @@ use core::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,
-        error::{Error, Located, Span},
-        explode_extra,
+        error::{Error, Span},
         input::{Input, InputType},
-        parser::{Check, Emit, Mode, PResult, Parser, ParserExtras},
+        parser::{Emit, Mode, Parser, ParserExtras},
         EmptyPhantom, IResult, MaybeRef,
 };
 
@@ -16,7 +15,8 @@ mod choice;
 mod filter;
 mod just;
 mod map;
-mod repeated;
+mod recursive;
+mod sequence;
 mod take;
 mod tuple;
 
@@ -25,11 +25,15 @@ pub use choice::*;
 pub use filter::*;
 pub use just::just;
 pub use map::*;
-pub use repeated::*;
+pub use recursive::*;
+pub use sequence::*;
 pub use take::*;
 pub use tuple::*;
 
 #[parser(extras = E)]
+/// A parser that accepts any input token,
+/// (but not the end of input, for which it returns an error)
+/// and returns it as-is.
 /// # Errors
 /// This function returns an error if end of file is reached.
 pub fn any<I: InputType, E: ParserExtras<I>>(mut input: I) -> I::Token {
@@ -44,17 +48,32 @@ pub struct Ignored<A, OA>(pub(crate) A, pub(crate) EmptyPhantom<OA>);
 impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
         for Ignored<A, OA>
 {
-        fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, ()>
-        where
-                Self: Sized,
-        {
-                match self.0.explode_check(inp) {
-                        (inp, Ok(())) => (inp, Ok(M::bind(|| {}))),
-                        (inp, Err(())) => (inp, Err(())),
-                }
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                self.0.check(input)
         }
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                self.0.check(input)
+        }
+}
 
-        explode_extra!(());
+#[parser(extras = E)]
+/// A parser that accepts only end of input.
+/// The output type of this parser is `()`.
+///
+/// # Errors
+/// This function returns an error if end of input was not reached.
+pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
+        let offset = input.offset;
+        match input.next() {
+                Some(found) => {
+                        let err = Error::expected_eof_found(
+                                Span::new_usize(input.span_since(offset)),
+                                crate::Maybe::Val(found),
+                        );
+                        Err((input, err))
+                }
+                None => Ok((input, ())),
+        }
 }
 
 #[cfg(test)]

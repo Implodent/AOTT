@@ -1,50 +1,51 @@
 use core::marker::PhantomData;
 
 use crate::{
-        error::{Error, Located, Span},
-        explode_extra,
+        error::{Error, Span},
         input::{Input, InputType},
         parser::*,
         IResult, Maybe,
 };
 
+fn filter_impl<
+        'parse,
+        I: InputType,
+        O,
+        E: ParserExtras<I>,
+        A: Parser<I, O, E>,
+        F: Fn(&O) -> bool,
+        M: Mode,
+>(
+        _mode: &M,
+        this: &FilterParser<A, F, O>,
+        input: Input<'parse, I, E>,
+) -> IResult<'parse, I, E, M::Output<O>> {
+        let offset = input.offset;
+        this.0.parse(input).and_then(|(input, thing)| {
+                if this.1(&thing) {
+                        Ok((input, M::bind(|| thing)))
+                } else {
+                        let err = Error::expected_token_found(
+                                Span::new_usize(input.span_since(offset)),
+                                vec![],
+                                Maybe::Val(input.peek().expect("no eof error but now eof. bruh.")),
+                        );
+                        Err((input, err))
+                }
+        })
+}
+
 pub struct FilterParser<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
 impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool> Parser<I, O, E>
         for FilterParser<A, F, O>
 {
-        fn explode<'parse, M: crate::parser::Mode>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> crate::parser::PResult<'parse, I, E, M, O>
-        where
-                Self: Sized,
-        {
-                let start = inp.offset;
-                let (mut inp, out) = self.0.explode_emit(inp);
-                let Ok(out) = out else {
-                        return (inp, Err(()));
-                };
-
-                if self.1(&out) {
-                        (inp, Ok(M::bind(|| out)))
-                } else {
-                        let curr = inp.offset;
-                        inp.offset = start;
-                        inp.errors.alt = Some(Located::at(
-                                inp.offset,
-                                Error::expected_token_found(
-                                        Span::new_usize(start..curr),
-                                        vec![],
-                                        Maybe::Val(inp.peek().expect("no eof error but now eof")),
-                                ),
-                        ));
-                        inp.offset = curr;
-
-                        (inp, Err(()))
-                }
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                filter_impl(&Check, self, input)
         }
 
-        explode_extra!(O);
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+                filter_impl(&Emit, self, input)
+        }
 }
 
 pub fn filter<I: InputType, E: ParserExtras<I>>(

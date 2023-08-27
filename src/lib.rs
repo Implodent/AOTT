@@ -136,23 +136,3 @@ pub mod sync {
 }
 
 use sync::{DynParser, MaybeSync};
-
-#[macro_export]
-macro_rules! explode_extra {
-        ( $O :ty ) => {
-                #[inline(always)]
-                fn explode_emit<'parse>(
-                        &self,
-                        inp: Input<'parse, I, E>,
-                ) -> PResult<'parse, I, E, Emit, $O> {
-                        Parser::<I, $O, E>::explode::<Emit>(self, inp)
-                }
-                #[inline(always)]
-                fn explode_check<'parse>(
-                        &self,
-                        inp: Input<'parse, I, E>,
-                ) -> PResult<'parse, I, E, Check, $O> {
-                        Parser::<I, $O, E>::explode::<Check>(self, inp)
-                }
-        };
-}

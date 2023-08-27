@@ -5,41 +5,15 @@ pub struct Then<A, B>(pub(crate) A, pub(crate) B);
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, (O1, O2), E> for Then<A, B>
 {
-        fn explode<'parse, M: Mode>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, M, (O1, O2)>
-        where
-                Self: Sized,
-        {
-                match self.0.explode_emit(inp) {
-                        (inp, Ok(o1)) => match self.1.explode_emit(inp) {
-                                (inp, Ok(o2)) => (inp, Ok(M::bind(|| (o1, o2)))),
-                                (inp, Err(())) => (inp, Err(())),
-                        },
-                        (inp, Err(())) => (inp, Err(())),
-                }
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, (O1, O2)> {
+                let (input, a) = self.0.parse(input)?;
+                let (input, b) = self.1.parse(input)?;
+                Ok((input, (a, b)))
         }
-
-        fn explode_check<'parse>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Check, (O1, O2)> {
-                let (inp, res) = self.0.explode_check(inp);
-                if let Err(()) = res {
-                        return (inp, Err(()));
-                }
-                let (inp, res) = self.1.explode_check(inp);
-                if let Err(()) = res {
-                        return (inp, Err(()));
-                }
-                (inp, Ok(()))
-        }
-        fn explode_emit<'parse>(
-                &self,
-                inp: Input<'parse, I, E>,
-        ) -> PResult<'parse, I, E, Emit, (O1, O2)> {
-                self.explode::<Emit>(inp)
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let (input, ()) = self.0.check(input)?;
+                let (input, ()) = self.0.check(input)?;
+                Ok((input, ()))
         }
 }
 
@@ -119,11 +93,11 @@ macro_rules! flatten_map {
     };
 }
 
-macro_rules! impl_group_for_tuple {
+macro_rules! impl_tuple_for_tuple {
     () => {};
     ($head:ident $ohead:ident $($X:ident $O:ident)*) => {
-        impl_group_for_tuple!($($X $O)*);
-        impl_group_for_tuple!(~ $head $ohead $($X $O)*);
+        impl_tuple_for_tuple!($($X $O)*);
+        impl_tuple_for_tuple!(~ $head $ohead $($X $O)*);
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
@@ -134,25 +108,31 @@ macro_rules! impl_group_for_tuple {
             $($X: Parser<I, $O, E>),*
         {
             #[inline]
-            fn explode<'parse, M: Mode>(&self, inp: Input<'parse, I, E>) -> PResult<'parse, I, E, M, ($($O,)*)> {
+            fn parse<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ($($O,)*)> {
                 let Tuple { parsers: ($($X,)*) } = self;
 
                 $(
-                    let (inp, $X) = match $X.explode::<M>(inp) {
-                        (inp, Ok(ok)) => (inp, ok),
-                        (inp, Err(())) => return (inp, Err(()))
-                    };
+                    let (inp, $X) = $X.parse(inp)?;
                 )*
 
-                (inp, Ok(flatten_map!(<M> $($X)*)))
+                Ok((inp, flatten_map!(<Emit> $($X)*)))
             }
 
-            explode_extra!(($($O,)*));
+            #[inline]
+            fn check<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let Tuple { parsers: ($($X,)*) } = self;
+
+                $(
+                    let (inp, $X) = $X.parse(inp)?;
+                )*
+
+                Ok((inp, ()))
+            }
         }
     };
 }
 
-impl_group_for_tuple! {
+impl_tuple_for_tuple! {
     A_ OA
     B_ OB
     C_ OC
