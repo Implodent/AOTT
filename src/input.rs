@@ -117,7 +117,7 @@ impl<T, E> Default for Errors<T, E> {
         }
 }
 
-pub struct InputOwned<I: InputType, E: ParserExtras<I>> {
+pub struct InputOwned<I: InputType, E: ParserExtras<I> = SimpleExtras<I>> {
         pub(crate) input: I,
         pub(crate) cx: E::Context,
         errors: Errors<I::Offset, E::Error>,
@@ -138,7 +138,6 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                 Input {
                         offset: self.input.start(),
                         input: &self.input,
-                        errors: &mut self.errors,
                         cx: &self.cx,
                 }
         }
@@ -146,7 +145,6 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                 Input {
                         offset,
                         input: &self.input,
-                        errors: &mut self.errors,
                         cx: &self.cx,
                 }
         }
@@ -164,11 +162,21 @@ pub struct Input<'parse, I: InputType, E: ParserExtras<I> = SimpleExtras<I>> {
         pub offset: I::Offset,
         #[doc(hidden)]
         pub(crate) input: &'parse I,
-        #[doc(hidden)]
-        pub errors: &'parse mut Errors<I::Offset, E::Error>,
+        // #[doc(hidden)]
+        // pub errors: &'parse mut Errors<I::Offset, E::Error>,
         // pub(crate) state: &'parse mut E::State,
         #[doc(hidden)]
         pub(crate) cx: &'parse E::Context,
+}
+
+impl<'parse, I: InputType, E: ParserExtras<I, Context = ()>> Input<'parse, I, E> {
+        pub fn new(input: &'parse I) -> Self {
+                Self {
+                        offset: input.start(),
+                        input,
+                        cx: &(),
+                }
+        }
 }
 
 impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
@@ -215,7 +223,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         pub fn save(&self) -> Marker<I> {
                 Marker {
                         offset: self.offset,
-                        err_count: self.errors.secondary.len(),
+                        err_count: 0, //self.errors.secondary.len(),
                 }
         }
 
@@ -225,7 +233,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         /// Using a marker from another input is UB. Your parser may explode. You may get a panic.
         #[inline(always)]
         pub fn rewind(&mut self, marker: Marker<I>) {
-                self.errors.secondary.truncate(marker.err_count);
+                // self.errors.secondary.truncate(marker.err_count);
                 self.offset = marker.offset;
         }
 
