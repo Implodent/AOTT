@@ -66,6 +66,23 @@ pub fn slice<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser
         Slice(parser, PhantomData)
 }
 
+pub fn with_slice<
+        'parse,
+        'a,
+        I: InputType + SliceInput<'a>,
+        E: ParserExtras<I>,
+        O,
+        F: Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, O>,
+>(
+        input: Input<'parse, I, E>,
+        f: F,
+) -> IResult<'parse, I, E, I::Slice> {
+        let before = input.offset;
+        let (input, _) = f(input)?;
+        let slice = input.input.slice(input.span_since(before));
+        Ok((input, slice))
+}
+
 /// A parser that accepts only one token out of the `things`.
 /// For example, you could pass a `&str` as `things`, and it would result in a parser,
 /// that would match any character that `things` contains.

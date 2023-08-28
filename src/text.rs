@@ -1,13 +1,14 @@
-use core::borrow::Borrow;
+use core::{borrow::Borrow, marker::PhantomData};
 
 use crate::{
-        container::{OrderedSeq, Seq},
+        container::OrderedSeq,
         derive::parser,
         error::{Error, Span},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
+        prelude::Parser,
         primitive::*,
-        IResult, MaybeUninitExt,
+        IResult,
 };
 
 mod private {
@@ -234,5 +235,80 @@ where
                 } else {
                         Ok((input, seq.clone()))
                 }
+        }
+}
+
+/// Parses a non-negative integer in the specified radix.
+///
+/// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
+/// has length one.
+///
+/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `I` is [`&[u8]`]).
+///
+/// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
+pub fn int<'parse, 'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
+        radix: u32,
+) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, &'a C::Str> {
+        move |input| {
+                with_slice(input, move |input| {
+                        let (input, cr) = any(input)?;
+                        let befunge = input.offset;
+                        if !(cr.is_digit(radix) && cr != C::digit_zero()) {
+                                let err = Error::expected_token_found(
+                                        Span::new_usize(input.span_since(befunge)),
+                                        vec![],
+                                        crate::Maybe::Val(cr),
+                                );
+                                return Err((input, err));
+                        }
+                        // hehe
+                        any.filter(move |cr: &C| cr.is_digit(radix))
+                                .repeated()
+                                .ignored()
+                                .or(just(C::digit_zero()).ignored())
+                                .check(input)
+                })
+        }
+}
+
+#[derive(Copy, Clone)]
+pub struct Padded<A, C>(A, PhantomData<C>);
+
+/// A parser that accepts and ignores any number of whitespace characters before or after another parser.
+pub fn padded<
+        'a,
+        I: InputType + StrInput<'a, C>,
+        E: ParserExtras<I>,
+        C: Char,
+        O,
+        A: Parser<I, O, E>,
+>(
+        parser: A,
+) -> Padded<A, C> {
+        Padded(parser, PhantomData)
+}
+
+impl<
+                'a,
+                I: InputType + StrInput<'a, C>,
+                E: ParserExtras<I>,
+                C: Char,
+                O,
+                A: Parser<I, O, E>,
+        > Parser<I, O, E> for Padded<A, C>
+{
+        fn check<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                input.skip_while(Char::is_whitespace);
+                let (mut input, ()) = self.0.check(input)?;
+                input.skip_while(Char::is_whitespace);
+                Ok((input, ()))
+        }
+
+        fn parse<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+                input.skip_while(Char::is_whitespace);
+                let (mut input, output) = self.0.parse(input)?;
+                input.skip_while(Char::is_whitespace);
+                Ok((input, output))
         }
 }
