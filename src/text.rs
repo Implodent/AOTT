@@ -1,7 +1,13 @@
+use core::borrow::Borrow;
+
 use crate::{
+        container::{OrderedSeq, Seq},
+        derive::parser,
+        error::{Error, Span},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
-        IResult,
+        primitive::*,
+        IResult, MaybeUninitExt,
 };
 
 mod private {
@@ -161,6 +167,72 @@ pub mod ascii {
                         }
                         let slice = input.input.slice(input.span_since(before));
                         Ok((input, slice))
+                }
+        }
+}
+
+#[parser(extras = E)]
+/// Parses a unix-style newline. (\n)
+pub fn newline<I: InputType, E: ParserExtras<I>>(input: I) -> I::Token
+where
+        I::Token: Char + PartialEq,
+{
+        just(Char::from_ascii(b'\n'))(input)
+}
+
+#[parser(extras = E)]
+/// Parses a DOS(Windows)-style newline. (\r\n)
+pub fn crlf<I: InputType, E: ParserExtras<I>>(input: I) -> [I::Token; 2]
+where
+        I::Token: Char + PartialEq,
+{
+        just([Char::from_ascii(b'\r'), Char::from_ascii(b'\n')])(input)
+}
+
+#[parser(extras = E)]
+/// Parses an OSX(MacOS)-style newline. (\r)
+pub fn cr<I: InputType, E: ParserExtras<I>>(input: I) -> I::Token
+where
+        I::Token: Char + PartialEq,
+{
+        just(Char::from_ascii(b'\r'))(input)
+}
+
+/// Parses a sequence of characters, ignoring the character's case.
+pub fn just_ignore_case<
+        'a,
+        'parse,
+        I: InputType,
+        E: ParserExtras<I>,
+        T: OrderedSeq<'a, I::Token> + Clone,
+>(
+        seq: T,
+) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, T>
+where
+        I::Token: Char + PartialEq + Clone + 'static,
+{
+        move |mut input| {
+                if let Some(err) = seq.seq_iter().find_map(|next| {
+                        let befunge = input.offset;
+                        let next = T::to_maybe_ref(next);
+                        match input.next_inner() {
+                                (_, Some(token))
+                                        if next.borrow_as_t().to_char().eq_ignore_ascii_case(
+                                                &token.borrow().to_char(),
+                                        ) =>
+                                {
+                                        None
+                                }
+                                (_, found) => Some(Error::expected_token_found_or_eof(
+                                        Span::new_usize(input.span_since(befunge)),
+                                        vec![next.into_clone()],
+                                        found.map(crate::Maybe::Val),
+                                )),
+                        }
+                }) {
+                        Err((input, err))
+                } else {
+                        Ok((input, seq.clone()))
                 }
         }
 }

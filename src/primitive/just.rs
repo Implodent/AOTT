@@ -1,10 +1,11 @@
 use super::*;
 
+/// Parses a sequence of tokens.
 pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
         seq: T,
 ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, T>
 where
-        I::Token: Eq + Clone + 'static,
+        I::Token: PartialEq + Clone + 'static,
 {
         move |mut input| {
                 if let Some(err) = seq.seq_iter().find_map(|next| {

@@ -194,6 +194,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// ```
         /// # use aott::prelude::*;
         /// let input = "hisnameisjuan";
+        ///
         /// #[parser]
         /// fn parser(input: &str) -> (&'a str, &'a str) {
         ///     tuple((

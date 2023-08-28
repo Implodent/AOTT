@@ -5,28 +5,27 @@ edition = "2021"
 description = "Aspect Of The Tokens - a parser combinator framework."
 license-file = "LICENSE"
 authors = ["nothendev <borodinov.ilya@gmail.com>", "abs0luty <adisalimgereev@gmail.com>"]
-readme = "_README_markdown.md"
+readme = "README.md"
 repository = "https://github.com/Implodent/AOTT"
 keywords = ["parser", "combinator", "token", "syntax"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]
 hashbrown = "0.14.0"
-aott_derive = { path = "./derive", optional = true }
+aott_derive = { path = "./derive" }
 
 [features]
 std = []
 builtin-text = []
 builtin-bytes = []
 error-recovery = []
-derive = ["dep:aott_derive"]
-default = ["std", "builtin-text", "derive", "error-recovery"]
+default = ["std", "builtin-text", "error-recovery"]
 
 [badges]
 maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
-zstd-safe = {version ="6.0.6", features=["std"]}
+zstd-safe = { version = "6.0.6", features = ["std"] }
 
 [[example]]
 name = "nbt"

@@ -17,15 +17,13 @@ pub mod primitive;
 #[cfg(feature = "error-recovery")]
 pub mod recovery;
 pub mod stream;
-#[cfg(feature = "derive")]
 pub use aott_derive as derive;
-#[cfg(feature = "derive")]
-pub use derive::*;
 
 #[cfg(feature = "builtin-text")]
 pub mod text;
 
 pub mod prelude {
+        pub use crate::derive::parser;
         pub use crate::error::{Error, IResult, Simple, Span};
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
@@ -33,8 +31,6 @@ pub mod prelude {
         pub use crate::parser::{Parser, ParserExtras, SimpleExtras};
         pub use crate::primitive::*;
         pub use crate::stream::Stream;
-        #[cfg(feature = "derive")]
-        pub use aott_derive::parser;
 }
 
 pub use error::IResult;
