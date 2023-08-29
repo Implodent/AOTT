@@ -213,6 +213,7 @@ where
                         NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char())
                 }))
                 .ignored()
+                .parse(input)
 }
 
 #[parser(extras = E)]
