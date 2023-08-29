@@ -4,7 +4,7 @@ use crate::{
         error::{Error, Span},
         input::{Input, InputType},
         parser::*,
-        IResult, Maybe,
+        IResult, MaybeDeref,
 };
 
 fn filter_impl<
@@ -28,7 +28,9 @@ fn filter_impl<
                         let err = Error::expected_token_found(
                                 Span::new_usize(input.span_since(offset)),
                                 vec![],
-                                Maybe::Val(input.peek().expect("no eof error but now eof. bruh.")),
+                                MaybeDeref::Val(
+                                        input.peek().expect("no eof error but now eof. bruh."),
+                                ),
                         );
                         Err((input, err))
                 }
@@ -59,7 +61,7 @@ pub fn filter<I: InputType, E: ParserExtras<I>>(
                                 let err = Error::expected_token_found(
                                         Span::new_usize(input.span_since(befunge)),
                                         vec![],
-                                        Maybe::Val(other),
+                                        MaybeDeref::Val(other),
                                 );
                                 Err((input, err))
                         }
@@ -97,7 +99,7 @@ where
                         let err = Error::expected_token_found(
                                 Span::new_usize(input.span_since(befunge)),
                                 vec![],
-                                Maybe::Val(n),
+                                MaybeDeref::Val(n),
                         );
                         Err((input, err))
                 }

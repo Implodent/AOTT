@@ -173,6 +173,12 @@ mod private {
 }
 
 pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
+        fn parse_from<'parse>(&self, input: &'parse I) -> IResult<'parse, I, E, O>
+        where
+                E: ParserExtras<I, Context = ()>,
+        {
+                self.parse(Input::new(input))
+        }
         /// # Errors
         /// Returns an error if the parser failed.
         fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O>;
@@ -204,7 +210,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         ///         end
         ///     )).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse(input)
         /// }
-        /// let (_, (pronoun, name)) = parser(Input::new(&input)).unwrap();
+        /// let (pronoun, name) = parser.parse_from(&input).unwrap().1;
         /// assert_eq!(pronoun, "his");
         /// assert_eq!(name, "juan");
         /// ```
@@ -263,11 +269,29 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 slice(self)
         }
-        fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<Self, P>
+        fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, true>
         where
                 Self: Sized,
         {
-                Then(self, other)
+                Then(self, other, PhantomData)
+        }
+        fn ignore_then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, false>
+        where
+                Self: Sized,
+        {
+                Then(self, other, PhantomData)
+        }
+        fn then_ignore<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O2, O, P, Self, false>
+        where
+                Self: Sized,
+        {
+                Then(other, self, PhantomData)
+        }
+        fn optional(self) -> Maybe<Self>
+        where
+                Self: Sized,
+        {
+                Maybe(self)
         }
 
         #[doc(hidden)]

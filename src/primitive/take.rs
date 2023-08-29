@@ -50,7 +50,7 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                         let error = Error::expected_token_found(
                                 Span::new_usize(input.span_since(before)),
                                 vec![],
-                                crate::Maybe::Val(unsafe {
+                                crate::MaybeDeref::Val(unsafe {
                                         input.input.next(before).1.expect("no token??")
                                 }),
                         );

@@ -76,7 +76,7 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
                 Some(found) => {
                         let err = Error::expected_eof_found(
                                 Span::new_usize(input.span_since(offset)),
-                                crate::Maybe::Val(found),
+                                crate::MaybeDeref::Val(found),
                         );
                         Err((input, err))
                 }
@@ -94,12 +94,23 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
 /// let (_, output) = (optional(just("domatch")))(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
 /// assert_eq!(output, None);
 /// ```
-pub fn optional<'parse, I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(
+pub fn maybe<'parse, I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(
         parser: A,
-) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, Option<O>> {
-        move |input| {
-                Ok(parser
-                        .parse(input)
-                        .map_or_else(|(input, _)| (input, None), |(input, t)| (input, Some(t))))
+) -> Maybe<A> {
+        Maybe(parser)
+}
+
+#[derive(Copy, Clone)]
+pub struct Maybe<A>(pub(crate) A);
+
+impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O>, E> for Maybe<A> {
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, Option<O>> {
+                Ok(self.0.parse(input).map_or_else(
+                        |(input, _)| (input, None),
+                        |(input, thing)| (input, Some(thing)),
+                ))
+        }
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                Ok((input, ()))
         }
 }

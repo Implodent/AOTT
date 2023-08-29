@@ -86,95 +86,138 @@ impl Char for u8 {
         }
 }
 
-pub mod ascii {
-        use crate::{
-                error::{Error, Span},
-                parser::Parser,
-                primitive::any,
-                Maybe,
-        };
-
-        use super::*;
-        /// A parser that accepts a C-style identifier.
-        ///
-        /// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
-        /// [`u8`]).
-        ///
-        /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
-        /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-        pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
-                inp: Input<'_, I, E>,
-        ) -> IResult<'_, I, E, &'a C::Str> {
-                let before = inp.offset;
-                let (inp, cr) = any(inp)?;
-                let chr = cr.to_char();
-                let span = inp.span_since(before);
-                if !(chr.is_ascii_alphabetic() || chr == '_') {
-                        return Err((
-                                inp,
-                                Error::expected_token_found(
-                                        Span::new_usize(span),
-                                        vec![],
-                                        crate::Maybe::Val(cr),
-                                ),
-                        ));
-                }
-                any.filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
-                        .repeated()
-                        .slice()
-                        .parse(inp)
+/// A parser that accepts a C-style identifier.
+///
+/// The output type of this parser is [`Char::Str`] (i.e: [`&str`] when `C` is [`char`], and [`&[u8]`] when `C` is
+/// [`u8`]).
+///
+/// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
+/// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
+pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
+        inp: Input<'_, I, E>,
+) -> IResult<'_, I, E, &'a C::Str> {
+        let before = inp.offset;
+        let (inp, cr) = any(inp)?;
+        let chr = cr.to_char();
+        let span = inp.span_since(before);
+        if !(chr.is_ascii_alphabetic() || chr == '_') {
+                return Err((
+                        inp,
+                        Error::expected_token_found(
+                                Span::new_usize(span),
+                                vec![],
+                                crate::MaybeDeref::Val(cr),
+                        ),
+                ));
         }
+        any.filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                .repeated()
+                .slice()
+                .parse(inp)
+}
 
-        /// # Panics
-        /// This function panics (only in debug mode) if the `keyword` is an invalid ASCII identifier.
-        #[track_caller]
-        pub fn keyword<
-                'a,
-                C: Char + core::fmt::Debug + 'a,
-                I: InputType + StrInput<'a, C> + 'a,
-                E: ParserExtras<I> + 'a,
-                Str: AsRef<C::Str> + 'a + Clone,
-        >(
-                keyword: Str,
-        ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
-        where
-                C::Str: PartialEq,
+/// # Panics
+/// This function panics (only in debug mode) if the `keyword` is an invalid ASCII identifier.
+#[track_caller]
+pub fn keyword<
+        'a,
+        C: Char + core::fmt::Debug + 'a,
+        I: InputType + StrInput<'a, C> + 'a,
+        E: ParserExtras<I> + 'a,
+        Str: AsRef<C::Str> + 'a + Clone,
+>(
+        keyword: Str,
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
+where
+        C::Str: PartialEq,
+{
+        #[cfg(debug_assertions)]
         {
-                #[cfg(debug_assertions)]
-                {
-                        let mut cs = C::str_to_chars(keyword.as_ref());
-                        if let Some(c) = cs.next() {
-                                assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {c:?}");
-                        } else {
-                                panic!("Keyword must have at least one character");
-                        }
-                        for c in cs {
-                                assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {c:?}");
-                        }
+                let mut cs = C::str_to_chars(keyword.as_ref());
+                if let Some(c) = cs.next() {
+                        assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {c:?}");
+                } else {
+                        panic!("Keyword must have at least one character");
                 }
-                move |input| {
-                        let before = input.offset;
-                        let (input, ident) = ident(input)?;
-                        if ident != keyword.as_ref() {
-                                let span = input.span_since(before);
-                                let err = Error::expected_token_found(
-                                        Span::new_usize(span),
-                                        vec![],
-                                        Maybe::Val(unsafe {
-                                                input.input.next(before).1.unwrap_unchecked()
-                                        }),
-                                );
-                                return Err((input, err));
-                        }
-                        let slice = input.input.slice(input.span_since(before));
-                        Ok((input, slice))
+                for c in cs {
+                        assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {c:?}");
                 }
         }
+        move |input| {
+                let before = input.offset;
+                let (input, ident) = ident(input)?;
+                if ident != keyword.as_ref() {
+                        let span = input.span_since(before);
+                        let err = Error::expected_token_found(
+                                Span::new_usize(span),
+                                vec![],
+                                crate::MaybeDeref::Val(unsafe {
+                                        input.input.next(before).1.unwrap_unchecked()
+                                }),
+                        );
+                        return Err((input, err));
+                }
+                let slice = input.input.slice(input.span_since(before));
+                Ok((input, slice))
+        }
+}
+
+static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
+        '\r',       // Carriage return
+        '\x0B',     // Vertical tab
+        '\x0C',     // Form feed
+        '\u{0085}', // Next line
+        '\u{2028}', // Line separator
+        '\u{2029}', // Paragraph separator
+];
+
+#[parser(extras = E)]
+/// A parser that accepts (and ignores) any newline characters or character sequences.
+///
+/// The output type of this parser is `()`.
+///
+/// This parser is quite extensive, recognizing:
+///
+/// - Line feed (`\n`)
+/// - Carriage return (`\r`)
+/// - Carriage return + line feed (`\r\n`)
+/// - Vertical tab (`\x0B`)
+/// - Form feed (`\x0C`)
+/// - Next line (`\u{0085}`)
+/// - Line separator (`\u{2028}`)
+/// - Paragraph separator (`\u{2029}`)
+///
+/// # Examples
+///
+/// ```
+/// # use aott::prelude::*;
+/// let newline = text::newline::<_, SimpleExtras<char>>;
+///
+/// assert_eq!(newline.parse_from(&"\n").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\r").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\r\n").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\x0B").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\x0C").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\u{0085}").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\u{2028}").unwrap().1, ());
+/// assert_eq!(newline.parse_from(&"\u{2029}").unwrap().1, ());
+/// ```
+pub fn newline<I: InputType, E: ParserExtras<I>>(input: I)
+where
+        I::Token: Char + PartialEq,
+{
+        // parses \r, which is either the OSX newline, or the start of a Windows newline (\r\n)
+        maybe(cr)
+                .ignore_then(lf) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
+                .or(filter(|cr: &I::Token| {
+                        NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char())
+                }))
+                .ignored()
 }
 
 #[parser(extras = E)]
 /// Parses a unix-style newline. (\n)
-pub fn newline<I: InputType, E: ParserExtras<I>>(input: I) -> I::Token
+pub fn lf<I: InputType, E: ParserExtras<I>>(input: I) -> I::Token
 where
         I::Token: Char + PartialEq,
 {
@@ -227,7 +270,7 @@ where
                                 (_, found) => Some(Error::expected_token_found_or_eof(
                                         Span::new_usize(input.span_since(befunge)),
                                         vec![next.into_clone()],
-                                        found.map(crate::Maybe::Val),
+                                        found.map(crate::MaybeDeref::Val),
                                 )),
                         }
                 }) {
@@ -258,7 +301,7 @@ pub fn int<'parse, 'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<
                                 let err = Error::expected_token_found(
                                         Span::new_usize(input.span_since(befunge)),
                                         vec![],
-                                        crate::Maybe::Val(cr),
+                                        crate::MaybeDeref::Val(cr),
                                 );
                                 return Err((input, err));
                         }

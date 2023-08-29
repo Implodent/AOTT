@@ -35,12 +35,23 @@ pub mod prelude {
 
 pub use error::IResult;
 
-pub enum Maybe<T, R: Deref<Target = T>> {
+pub enum MaybeDeref<T, R: Deref<Target = T>> {
         Ref(R),
         Val(T),
 }
 
-pub type MaybeRef<'a, T> = Maybe<T, &'a T>;
+impl<T, R: Deref<Target = T>> From<T> for MaybeDeref<T, R> {
+        fn from(value: T) -> Self {
+                Self::Val(value)
+        }
+}
+impl<'a, T> From<&'a T> for MaybeDeref<T, &'a T> {
+        fn from(value: &'a T) -> Self {
+                Self::Ref(value)
+        }
+}
+
+pub type MaybeRef<'a, T> = MaybeDeref<T, &'a T>;
 
 impl<'a, T> MaybeRef<'a, T> {
         pub fn borrow_as_t<'b: 'a>(&'b self) -> &'b T {
@@ -51,7 +62,7 @@ impl<'a, T> MaybeRef<'a, T> {
         }
 }
 
-impl<T: Clone, R: Deref<Target = T>> Maybe<T, R> {
+impl<T: Clone, R: Deref<Target = T>> MaybeDeref<T, R> {
         pub fn into_clone(self) -> T {
                 match self {
                         Self::Ref(r) => r.to_owned(),
