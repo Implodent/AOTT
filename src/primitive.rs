@@ -91,12 +91,10 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
 /// ```
 /// # use aott::prelude::*;
 /// let input = "dontmatch";
-/// let (_, output) = (maybe(just("domatch")))(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
+/// let (_, output) = (maybe::<&str, SimpleExtras<&str>, _, _>(just("domatch"))).parse_from(&input).unwrap();
 /// assert_eq!(output, None);
 /// ```
-pub fn maybe<'parse, I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(
-        parser: A,
-) -> Maybe<A> {
+pub fn maybe<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(parser: A) -> Maybe<A> {
         Maybe(parser)
 }
 

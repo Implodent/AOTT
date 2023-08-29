@@ -171,7 +171,6 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
         '\u{2029}', // Paragraph separator
 ];
 
-#[parser(extras = E)]
 /// A parser that accepts (and ignores) any newline characters or character sequences.
 ///
 /// The output type of this parser is `()`.
@@ -190,8 +189,8 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
 /// # Examples
 ///
 /// ```
-/// # use aott::prelude::*;
-/// let newline = text::newline::<_, SimpleExtras<char>>;
+/// # use aott::{prelude::*, text};
+/// let newline = text::newline::<_, SimpleExtras<&str>>();
 ///
 /// assert_eq!(newline.parse_from(&"\n").unwrap().1, ());
 /// assert_eq!(newline.parse_from(&"\r").unwrap().1, ());
@@ -202,18 +201,16 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
 /// assert_eq!(newline.parse_from(&"\u{2028}").unwrap().1, ());
 /// assert_eq!(newline.parse_from(&"\u{2029}").unwrap().1, ());
 /// ```
-pub fn newline<I: InputType, E: ParserExtras<I>>(input: I)
+pub fn newline<I: InputType, E: ParserExtras<I>>() -> impl Parser<I, (), E>
 where
         I::Token: Char + PartialEq,
 {
         // parses \r, which is either the OSX newline, or the start of a Windows newline (\r\n)
-        maybe(cr)
-                .ignore_then(lf) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
-                .or(filter(|cr: &I::Token| {
+        (cr.optional().ignore_then(lf)) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
+                .or(any.filter(|cr: &I::Token| {
                         NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char())
                 }))
                 .ignored()
-                .parse(input)
 }
 
 #[parser(extras = E)]
