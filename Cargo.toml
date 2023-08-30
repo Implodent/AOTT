@@ -13,6 +13,7 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 hashbrown = "0.14.0"
 aott_derive = { path = "./derive" }
+num-traits = "0.2.16"
 
 [features]
 std = []

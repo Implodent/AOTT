@@ -7,7 +7,7 @@ use core::{
 use crate::{
         error::{Error, Located, Span},
         parser::{Parser, ParserExtras, SimpleExtras},
-        stream::Stream,
+        stream::{Spanned, SpannedStream, Stream},
         text::Char,
 };
 
@@ -16,6 +16,8 @@ use self::private::Sealed;
 mod private {
         pub trait Sealed {}
 }
+
+impl<T, S: Spanned<T>, I: Iterator<Item = S>> Sealed for SpannedStream<T, S, I> {}
 
 #[allow(clippy::module_name_repetitions)]
 pub trait InputType: Sealed {
