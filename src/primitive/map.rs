@@ -10,13 +10,19 @@ where
         B: Parser<I, O, E>,
 {
         fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.check(input)
-                        .or_else(|(input, _)| self.1.check(input))
+                let befunge = input.save();
+                self.0.check(input).or_else(|(mut input, _)| {
+                        input.rewind(befunge);
+                        self.1.check(input)
+                })
         }
 
         fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
-                self.0.parse(input)
-                        .or_else(|(input, _)| self.1.parse(input))
+                let befunge = input.save();
+                self.0.parse(input).or_else(|(mut input, _)| {
+                        input.rewind(befunge);
+                        self.1.parse(input)
+                })
         }
 }
 

@@ -115,3 +115,25 @@ macro_rules! select {
         })
     };
 }
+
+pub struct Rewind<A>(A);
+impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>> Parser<I, O, E> for Rewind<A> {
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let befunge = input.save();
+                let (mut input, output) = self.0.check(input)?;
+                input.rewind(befunge);
+                Ok((input, output))
+        }
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+                let befunge = input.save();
+                let (mut input, output) = self.0.parse(input)?;
+                input.rewind(befunge);
+                Ok((input, output))
+        }
+}
+
+/// Transforms a parser, so that when it completes, the input is rewound to where it was before parsing.
+#[must_use]
+pub fn rewind<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>>(parser: A) -> Rewind<A> {
+        Rewind(parser)
+}
