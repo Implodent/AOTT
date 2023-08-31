@@ -14,10 +14,11 @@ categories = ["parsing", "text-processing"]
 hashbrown = "0.14.0"
 aott_derive = { path = "./derive" }
 num-traits = "0.2.16"
+unicode-ident = { version = "1.0.11", optional = true }
 
 [features]
 std = []
-builtin-text = []
+builtin-text = ["dep:unicode-ident"]
 builtin-bytes = []
 error-recovery = []
 default = ["std", "builtin-text", "error-recovery"]

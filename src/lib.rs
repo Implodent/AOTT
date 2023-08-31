@@ -11,6 +11,7 @@ use core::ops::Deref;
 pub mod bytes;
 pub mod container;
 pub mod error;
+pub mod extra;
 pub mod input;
 pub mod parser;
 pub mod primitive;
@@ -23,14 +24,19 @@ pub use aott_derive as derive;
 pub mod text;
 
 pub mod prelude {
+        #[cfg(feature = "builtin-bytes")]
+        pub use crate::bytes;
         pub use crate::derive::parser;
-        pub use crate::error::{Error, IResult, Simple, Span};
+        pub use crate::error::{Error, IResult, Span};
+        pub use crate::extra;
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
         };
-        pub use crate::parser::{Parser, ParserExtras, SimpleExtras};
+        pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;
         pub use crate::stream::Stream;
+        #[cfg(feature = "builtin-text")]
+        pub use crate::text;
 }
 
 pub use error::IResult;

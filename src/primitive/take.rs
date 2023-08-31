@@ -1,4 +1,7 @@
-use core::{mem::MaybeUninit, ops::RangeTo};
+use core::{
+        mem::MaybeUninit,
+        ops::{RangeInclusive, RangeTo},
+};
 
 use crate::MaybeUninitExt;
 

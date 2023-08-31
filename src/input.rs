@@ -1,45 +1,36 @@
 #![allow(dead_code)]
-use core::{
-        hash::Hash,
-        ops::{Range, RangeFrom},
-};
-
 use crate::{
         error::{Error, Located, Span},
         parser::{Parser, ParserExtras, SimpleExtras},
         stream::{Spanned, SpannedStream, Stream},
         text::Char,
 };
-
-use self::private::Sealed;
-
-mod private {
-        pub trait Sealed {}
-}
-
-impl<T, S: Spanned<T>, I: Iterator<Item = S>> Sealed for SpannedStream<T, S, I> {}
+use core::{
+        hash::Hash,
+        ops::{Range, RangeFrom},
+};
+use num_traits::{One, Zero};
 
 #[allow(clippy::module_name_repetitions)]
-pub trait InputType: Sealed {
+pub trait InputType {
         #[doc(hidden)]
-        type Offset: Copy + Hash + Ord + Into<usize>;
+        type Offset: Copy + Hash + Ord + Into<usize> + Zero + One;
         type Token;
 
         #[doc(hidden)]
         fn start(&self) -> Self::Offset;
 
+        /// # Safety
+        /// If `offset` is not strictly the one provided by `Self::start` or returned as the first tuple value from this function,
+        /// calling `next` is undefined behavior. It may index memory outside of the desired range, it may segfault, it may panic etc. etc.
+        /// Stay safe and don't use this api unless you want to explode.
         #[doc(hidden)]
-        // # Safety
-        // If `offset` is not strictly the one provided by `Self::start` or returned as the first tuple value from this function,
-        // calling `next` is undefined behavior. It may index memory outside of the desired range, it may segfault, it may panic etc. etc.
-        // Stay safe and don't use this api unless you want to explode.
         unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
 
         #[doc(hidden)]
         fn prev(offset: Self::Offset) -> Self::Offset;
 }
 
-impl<'a> Sealed for &'a str {}
 impl<'a> InputType for &'a str {
         type Token = char;
         type Offset = usize;
@@ -71,7 +62,6 @@ impl<'a> InputType for &'a str {
         }
 }
 
-impl<'a, T> Sealed for &'a [T] {}
 impl<'a, T: Clone> InputType for &'a [T] {
         type Offset = usize;
         type Token = T;
@@ -96,8 +86,6 @@ impl<'a, T: Clone> InputType for &'a [T] {
         }
 }
 
-impl<I: Iterator> Sealed for Stream<I> {}
-
 #[doc(hidden)]
 pub trait ExactSizeInput: InputType {
         unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<usize>;
@@ -119,7 +107,7 @@ impl<T, E> Default for Errors<T, E> {
         }
 }
 
-pub struct InputOwned<I: InputType, E: ParserExtras<I> = SimpleExtras<I>> {
+pub struct InputOwned<I: InputType, E: ParserExtras<I> = extra::Err<I>> {
         pub(crate) input: I,
         pub(crate) cx: E::Context,
         errors: Errors<I::Offset, E::Error>,
@@ -152,18 +140,17 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
         }
 }
 
-// InputRef
 /// **Warning** `InputOwned` and `Input` are an unstable API.
 /// This could change at any time without notice.
 /// Please consider using primitives like `any` over functions in this struct. Please.
 /// If you do, support is not guaranteed.
 /// Changing the `offset` to arbitrary values could lead to undefined behavior. Don't modify anything in this struct if you want to be free of UB and/or segfaults.
 #[derive(Debug)]
-pub struct Input<'parse, I: InputType, E: ParserExtras<I> = SimpleExtras<I>> {
+pub struct Input<'parse, I: InputType, E: ParserExtras<I> = extra::Err<I>> {
         #[doc(hidden)]
         pub offset: I::Offset,
         #[doc(hidden)]
-        pub(crate) input: &'parse I,
+        pub input: &'parse I,
         // #[doc(hidden)]
         // pub errors: &'parse mut Errors<I::Offset, E::Error>,
         // pub(crate) state: &'parse mut E::State,

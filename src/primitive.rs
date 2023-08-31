@@ -67,8 +67,8 @@ impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
 /// ```
 /// # use aott::prelude::*;
 /// let input = "eof";
-/// let (_, (output, ())) = (just("eof").then(end)).parse(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
-/// assert_eq!(output, "eof");
+/// let parser = just("eof").then_ignore(end::<_, extra::Err<_>>);
+/// assert_eq!(parser.parse_from(&input).into_result(), Ok("eof"));
 /// ```
 pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
         let offset = input.offset;
@@ -90,9 +90,9 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
 /// # Example
 /// ```
 /// # use aott::prelude::*;
+/// let parser = maybe::<&str, extra::Err<&str>, _, _>(just("domatch"));
 /// let input = "dontmatch";
-/// let (_, output) = (maybe::<&str, SimpleExtras<&str>, _, _>(just("domatch"))).parse_from(&input).unwrap();
-/// assert_eq!(output, None);
+/// assert_eq!(parser.parse_from(&input).into_result(), Ok(None));
 /// ```
 pub fn maybe<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(parser: A) -> Maybe<A> {
         Maybe(parser)

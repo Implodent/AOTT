@@ -88,3 +88,39 @@ impl<
                         })
         }
 }
+
+pub struct TryMapWithSpan<A, F, O, U>(
+        pub(crate) A,
+        pub(crate) F,
+        pub(crate) PhantomData<O>,
+        pub(crate) PhantomData<U>,
+);
+impl<
+                I: InputType,
+                O,
+                E: ParserExtras<I>,
+                U,
+                F: Fn(O, Range<I::Offset>) -> Result<U, E::Error>,
+                A: Parser<I, O, E>,
+        > Parser<I, U, E> for TryMapWithSpan<A, F, O, U>
+{
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let befunge = input.offset;
+                self.0.parse(input).and_then(|(input, thing)| {
+                        match self.1(thing, input.span_since(befunge)) {
+                                Ok(_) => Ok((input, ())),
+                                Err(e) => Err((input, e)),
+                        }
+                })
+        }
+
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, U> {
+                let befunge = input.offset;
+                self.0.parse(input).and_then(|(input, thing)| {
+                        match self.1(thing, input.span_since(befunge)) {
+                                Ok(ok) => Ok((input, ok)),
+                                Err(e) => Err((input, e)),
+                        }
+                })
+        }
+}
