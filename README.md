@@ -1,5 +1,9 @@
 # AOTT - Aspect Of The Tokens
 
+[![crates.io](https://img.shields.io/crates/v/aott.svg)](https://crates.io/crates/aott)
+[![crates.io](https://docs.rs/aott/badge.svg)](https://docs.rs/chumsky)
+[![License](https://img.shields.io/crates/l/aott.svg)](https://github.com/Implodent/AOTT)
+
 AOTT is a parser combinator framework - a library that contains utilities for painlessly creating parsers.
 
 It also includes a few built-in utilities,
