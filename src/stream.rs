@@ -1,7 +1,10 @@
 use core::{
         cell::Cell,
+        hash::Hash,
+        marker::PhantomData,
         ops::{Range, RangeFrom},
 };
+use num_traits::{One, SaturatingSub, Zero};
 
 use crate::input::{ExactSizeInput, InputType};
 
@@ -106,5 +109,84 @@ where
                 self.tokens.swap(&other);
 
                 range.start..len
+        }
+}
+
+pub trait Spanned<T> {
+        type Offset: Copy + Hash + Ord + Into<usize> + One + Zero + SaturatingSub;
+
+        fn span(&self) -> Range<Self::Offset>;
+        fn value(&self) -> &T;
+        fn into_tuple(self) -> (T, Range<Self::Offset>);
+}
+
+impl<T, O: Copy + Hash + Ord + Into<usize> + One + Zero + SaturatingSub> Spanned<T>
+        for (T, Range<O>)
+{
+        type Offset = O;
+
+        fn span(&self) -> Range<Self::Offset> {
+                self.1.clone()
+        }
+        fn value(&self) -> &T {
+                &self.0
+        }
+        fn into_tuple(self) -> (T, Range<Self::Offset>) {
+                self
+        }
+}
+
+pub struct SpannedStream<T, S: Spanned<T>, I: Iterator<Item = S>> {
+        tokens: Cell<(Vec<I::Item>, Option<I>)>,
+        _t: PhantomData<T>,
+}
+
+impl<T, S: Spanned<T>, I: Iterator<Item = S>> SpannedStream<T, S, I> {
+        pub fn from_iter<J: IntoIterator<IntoIter = I>>(iter: J) -> Self {
+                Self {
+                        tokens: Cell::new((Vec::new(), Some(iter.into_iter()))),
+                        _t: PhantomData,
+                }
+        }
+}
+
+impl<T, S: Spanned<T>, I: Iterator<Item = S>> InputType for SpannedStream<T, S, I>
+where
+        I::Item: Clone,
+{
+        type Offset = S::Offset;
+        type Token = T;
+
+        #[inline(always)]
+        fn start(&self) -> Self::Offset {
+                Zero::zero()
+        }
+
+        #[inline(always)]
+        fn prev(offset: Self::Offset) -> Self::Offset {
+                offset.saturating_sub(&One::one())
+        }
+
+        #[inline(always)]
+        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+                let mut other = Cell::new((Vec::new(), None));
+                self.tokens.swap(&other);
+
+                let (vec, iter) = other.get_mut();
+
+                // Pull new items into the vector if we need them
+                if vec.len() <= offset.into() {
+                        vec.extend(iter.as_mut().expect("no iterator?!").take(500));
+                }
+
+                // Get the token at the given offset
+                let tok = vec.get(offset.into()).map(I::Item::clone);
+
+                self.tokens.swap(&other);
+
+                (
+                        offset + tok.as_ref().map_or(Zero::zero(), |t| t.span().end),
+                        tok.map(|t| t.into_tuple().0),
+                )
         }
 }
