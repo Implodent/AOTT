@@ -2,6 +2,10 @@
 name = "aott_derive"
 version = "0.1.0"
 edition = "2021"
+description = "Procedural macros for AOTT."
+repository = "https://github.com/Imploent/AOTT"
+license = "MIT"
+readme = "../README.md"
 
 [lib]
 proc-macro = true
