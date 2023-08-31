@@ -1,7 +1,7 @@
-use core::marker::PhantomData;
+use core::{marker::PhantomData, ops::Range};
 
 use crate::{
-        error::{Error, ParseResult, Simple},
+        error::{Error, ParseResult},
         input::{Input, InputType, SliceInput},
         primitive::*,
         sync::RefC,
@@ -29,6 +29,8 @@ mod private {
 
                 /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
                 fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
+
+                fn invoke_unbind<T, F: FnMut(T)>(f: F, output: Self::Output<T>);
 
                 /// Choose between two fallible functions to execute depending on the mode.
                 fn choose<A, T, E, F: FnOnce(A) -> Result<T, E>, G: FnOnce(A) -> Result<(), E>>(
@@ -121,6 +123,11 @@ mod private {
                 {
                         parser.parse(inp)
                 }
+
+                #[inline(always)]
+                fn invoke_unbind<T, F: FnMut(T)>(mut f: F, output: Self::Output<T>) {
+                        f(output)
+                }
         }
 
         /// Check mode - all output is discarded, and only uses parsers to check validity
@@ -147,6 +154,7 @@ mod private {
                         _: F,
                 ) -> Self::Output<V> {
                 }
+                fn invoke_unbind<T, F: FnMut(T)>(_: F, (): Self::Output<T>) {}
                 #[inline(always)]
                 fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
                         _: &mut Self::Output<T>,
@@ -173,11 +181,11 @@ mod private {
 }
 
 pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
-        fn parse_from<'parse>(&self, input: &'parse I) -> IResult<'parse, I, E, O>
+        fn parse_from<'parse>(&self, input: &'parse I) -> ParseResult<'parse, I, O, E>
         where
                 E: ParserExtras<I, Context = ()>,
         {
-                self.parse(Input::new(input))
+                ParseResult::single(self.parse(Input::new(input)))
         }
         /// # Errors
         /// Returns an error if the parser failed.
@@ -201,7 +209,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # use aott::prelude::*;
         /// let input = "hisnameisjuan";
         ///
-        /// #[parser]
+        /// #[aott::derive::parser]
         /// fn parser(input: &str) -> (&'a str, &'a str) {
         ///     tuple((
         ///         choice((just("his"), just("her"))),
@@ -210,7 +218,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         ///         end
         ///     )).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse(input)
         /// }
-        /// let (pronoun, name) = parser.parse_from(&input).unwrap().1;
+        /// let (pronoun, name) = parser.parse_from(&input).into_result().unwrap();
         /// assert_eq!(pronoun, "his");
         /// assert_eq!(name, "juan");
         /// ```
@@ -238,12 +246,28 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
+        fn try_map_with_span<F: Fn(U, Range<I::Offset>) -> Result<U, E::Error>, U>(
+                self,
+                f: F,
+        ) -> TryMapWithSpan<Self, F, O, U>
+        where
+                Self: Sized,
+        {
+                TryMapWithSpan(self, f, PhantomData, PhantomData)
+        }
         fn filter<F: Fn(&O) -> bool>(self, f: F) -> FilterParser<Self, F, O>
         where
                 Self: Sized,
         {
                 FilterParser(self, f, PhantomData)
         }
+        /// # Example
+        /// ```
+        /// # use aott::prelude::*;
+        /// use aott::text::Char;
+        /// let parser = filter::<&str, extra::Err<&str>>(|c: &char| c.is_ident_start()).then(filter(|c: &char| c.is_ident_continue()).repeated());
+        /// assert_eq!(parser.parse_from(&"hello").into_result(), Ok(('h', "ello".chars().collect())));
+        /// ```
         fn repeated(self) -> Repeated<Self, O, Vec<O>>
         where
                 Self: Sized,
@@ -251,6 +275,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Repeated {
                         parser: self,
                         phantom: PhantomData,
+                        at_least: 0,
+                        at_most: !0,
                 }
         }
         fn repeated_custom<V: FromIterator<O>>(self) -> Repeated<Self, O, V>
@@ -260,6 +286,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Repeated {
                         parser: self,
                         phantom: PhantomData,
+                        at_least: 0,
+                        at_most: !0,
                 }
         }
         fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
@@ -269,23 +297,26 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 slice(self)
         }
-        fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, true>
+        fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, true, false>
         where
                 Self: Sized,
         {
                 Then(self, other, PhantomData)
         }
-        fn ignore_then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, false>
+        fn ignore_then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, false, true>
         where
                 Self: Sized,
         {
                 Then(self, other, PhantomData)
         }
-        fn then_ignore<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O2, O, P, Self, false>
+        fn then_ignore<O2, P: Parser<I, O2, E>>(
+                self,
+                other: P,
+        ) -> Then<O, O2, Self, P, false, false>
         where
                 Self: Sized,
         {
-                Then(other, self, PhantomData)
+                Then(self, other, PhantomData)
         }
         fn optional(self) -> Maybe<Self>
         where
@@ -326,14 +357,17 @@ pub trait ParserExtras<I: InputType> {
         type Context;
         // type State;
 
-        fn recover<O>(
+        fn recover<'parse, O>(
                 _error: Self::Error,
                 _context: Self::Context,
-                input: I,
+                input: Input<'parse, I, Self>,
                 prev_output: Option<O>,
                 // Errors.secondary
                 prev_errors: Vec<Self::Error>,
-        ) -> ParseResult<I, O, Self::Error> {
+        ) -> ParseResult<'parse, I, O, Self>
+        where
+                Self: Sized,
+        {
                 // default: noop
                 ParseResult {
                         input,
@@ -341,17 +375,6 @@ pub trait ParserExtras<I: InputType> {
                         errors: prev_errors,
                 }
         }
-}
-
-#[derive(Default, Clone, Copy, Debug)]
-pub struct SimpleExtras<I: InputType, E: Error<I> = Simple<<I as InputType>::Token>>(
-        PhantomData<I>,
-        PhantomData<E>,
-);
-
-impl<I: InputType, E: Error<I>> ParserExtras<I> for SimpleExtras<I, E> {
-        type Error = E;
-        type Context = ();
 }
 
 /// See [`Parser::boxed`].

@@ -1,6 +1,6 @@
 use super::*;
 
-/// Parses a sequence of tokens.
+/// Parses a sequence of tokens [`seq`].
 pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
         seq: T,
 ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, T>

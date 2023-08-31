@@ -1,45 +1,95 @@
 use core::marker::PhantomData;
 
-use crate::{container::Seq, input::SliceInput};
+use crate::{container::Seq, input::SliceInput, parser::Check};
 
 use super::*;
 
 #[derive(Copy, Clone)]
-pub struct Repeated<P, O, V: FromIterator<O>> {
+pub struct Repeated<P, O, V: FromIterator<O> = Vec<O>> {
         pub(crate) parser: P,
         pub(crate) phantom: PhantomData<(O, V)>,
+        pub(crate) at_least: usize,
+        // Slightly evil: should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
+        pub(crate) at_most: u64,
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, V: FromIterator<O>>
-        Parser<I, Vec<O>, E> for Repeated<P, O, V>
-{
-        fn check<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                loop {
-                        let before = input.save();
-                        match self.parser.check(input) {
-                                Ok((inp, ())) => input = inp,
-                                Err((mut inp, _)) => {
-                                        inp.rewind(before);
-                                        break Ok((inp, ()));
-                                }
-                        }
+impl<P, O, V: FromIterator<O>> Repeated<P, O, V> {
+        pub fn at_least(self, at_least: usize) -> Self {
+                Self { at_least, ..self }
+        }
+        pub fn at_most(self, at_most: usize) -> Self {
+                Self {
+                        at_most: at_most as u64,
+                        ..self
                 }
         }
-        fn parse<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, Vec<O>> {
-                let mut result = vec![];
-                loop {
-                        let before = input.save();
-                        match self.parser.parse(input) {
-                                Ok((inp, thimg)) => {
-                                        input = inp;
-                                        result.push(thimg);
+        pub fn exactly(self, exactly: usize) -> Self {
+                Self {
+                        at_least: exactly,
+                        at_most: exactly as u64,
+                        ..self
+                }
+        }
+}
+fn repeated_impl<
+        'parse,
+        I: InputType,
+        O,
+        E: ParserExtras<I>,
+        P: Parser<I, O, E>,
+        V: FromIterator<O>,
+        M: Mode,
+>(
+        mut input: Input<'parse, I, E>,
+        this: &Repeated<P, O, V>,
+        _m: &M,
+) -> IResult<'parse, I, E, M::Output<V>> {
+        let mut result = vec![];
+        let mut count = 0usize;
+        let res = loop {
+                if this.at_most != !0 && count as u64 >= this.at_most {
+                        break Ok((input, M::bind(|| result.into_iter().collect())));
+                }
+
+                let before = input.save();
+                match M::invoke(&this.parser, input) {
+                        Ok((inp, o)) => {
+                                input = inp;
+                                M::invoke_unbind(|val| result.push(val), o);
+                        }
+                        Err((mut inp, e)) => {
+                                if count < this.at_least {
+                                        break Err((inp, e));
                                 }
-                                Err((mut inp, _)) => {
-                                        inp.rewind(before);
-                                        break Ok((inp, result));
-                                }
+                                inp.rewind(before);
+                                break Ok((inp, M::bind(|| result.into_iter().collect())));
                         }
                 }
+
+                count += 1; // what the fuck
+        };
+        if count < this.at_least {
+                let inp = res?.0;
+                let err = Error::expected_token_found(
+                        Span::new_usize(inp.span_since(I::prev(inp.offset))),
+                        vec![],
+                        crate::MaybeDeref::Val(inp.peek().expect("huh")),
+                );
+                Err((inp, err))
+        } else {
+                res
+        }
+}
+
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, V: FromIterator<O>> Parser<I, V, E>
+        for Repeated<P, O, V>
+{
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                repeated_impl(input, self, &Check)
+        }
+
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, V> {
+                repeated_impl(input, self, &Emit)
         }
 }
 
@@ -87,9 +137,9 @@ pub fn with_slice<
 /// For example, you could pass a `&str` as `things`, and it would result in a parser,
 /// that would match any character that `things` contains.
 /// That works the same with an array, and really, anything that implements `Seq<I::Token>`.
-pub fn one_of<'parse, 'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
+pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
-) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, I::Token>
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, I::Token>
 where
         I::Token: PartialEq,
 {
@@ -100,12 +150,11 @@ where
 /// ```
 /// # use aott::prelude::*;
 /// let input = "abcd";
-/// let (_, value) = none_of("bcd")(Input::<&str, SimpleExtras<&str>>::new(&input)).unwrap();
-/// assert_eq!(value, 'a');
+/// assert_eq!(none_of::<&str, extra::Err<_>, _>("bcd").parse_from(&input).into_result(), Ok('a'));
 /// ```
-pub fn none_of<'parse, 'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
+pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
-) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, I::Token>
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, I::Token>
 where
         I::Token: PartialEq,
 {
@@ -118,15 +167,14 @@ where
 /// ```
 /// # use aott::prelude::*;
 /// let input = "\"h\"";
-/// let parser = delimited(just("\""), any::<_, SimpleExtras<_>>, just("\""));
-/// let (_, value) = parser(Input::new(&input)).unwrap();
-/// assert_eq!(value, 'h');
+/// let parser = delimited(just("\""), any::<_, extra::Err<_>>, just("\""));
+/// assert_eq!(parser.parse_from(&input).into_result(), Ok('h'));
 /// ```
-pub fn delimited<'parse, I: InputType, E: ParserExtras<I>, O, O1, O2>(
+pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         start_delimiter: impl Parser<I, O2, E>,
         content_parser: impl Parser<I, O, E>,
         end_delimiter: impl Parser<I, O1, E>,
-) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, O> {
         move |input| {
                 let (input, _) = start_delimiter.parse(input)?;
                 let (input, content) = content_parser.parse(input)?;

@@ -69,7 +69,7 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                                         t => t,
                                 };
                                 let extras = extras.unwrap_or_else(|| {
-                                        Path::parse.parse2(quote!(SimpleExtras<#ty>)).unwrap()
+                                        Path::parse.parse2(quote!(extra::Err<#ty>)).unwrap()
                                 });
                                 let ty_for_ret = ty.clone();
                                 let parse_lifetime_for_ret = parse_lifetime.clone();

@@ -1,5 +1,7 @@
 use core::ops::Range;
 
+use num_traits::Zero;
+
 use crate::{
         input::{Input, InputType},
         parser::ParserExtras,
@@ -97,72 +99,39 @@ impl<T, E> Located<T, E> {
         }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Simple<Item> {
-        pub span: Range<usize>,
-        pub reason: SimpleReason<Item>,
-}
-
-impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {
-        type Span = Range<usize>;
-
-        fn expected_eof_found(span: Self::Span, found: MaybeRef<'_, Item>) -> Self {
-                Self {
-                        span,
-                        reason: SimpleReason::ExpectedEOF {
-                                found: found.into_clone(),
-                        },
-                }
-        }
-        fn expected_token_found(
-                span: Self::Span,
-                expected: Vec<Item>,
-                found: MaybeRef<'_, Item>,
-        ) -> Self {
-                Self {
-                        span,
-                        reason: SimpleReason::ExpectedTokenFound {
-                                expected,
-                                found: found.into_clone(),
-                        },
-                }
-        }
-        fn unexpected_eof(span: Self::Span, expected: Option<Vec<Item>>) -> Self {
-                Self {
-                        span,
-                        reason: SimpleReason::UnexpectedEOF(expected),
-                }
-        }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SimpleReason<Item> {
-        ExpectedEOF { found: Item },
-        UnexpectedEOF(Option<Vec<Item>>),
-        ExpectedTokenFound { expected: Vec<Item>, found: Item },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParseResult<I, O, E> {
-        pub input: I,
+// #[derive(Debug)]
+pub struct ParseResult<'parse, I: InputType, O, E: ParserExtras<I>> {
+        pub input: Input<'parse, I, E>,
         pub output: Option<O>,
-        pub errors: Vec<E>,
+        pub errors: Vec<E::Error>,
 }
 
-impl<I, O, E> ParseResult<I, O, E> {
-        pub fn single((input, result): (I, Result<O, E>)) -> Self {
+impl<'parse, I: InputType, O, E: ParserExtras<I>> ParseResult<'parse, I, O, E> {
+        pub fn single(result: IResult<'parse, I, E, O>) -> Self {
                 match result {
-                        Ok(ok) => Self {
+                        Ok((input, ok)) => Self {
                                 input,
                                 output: Some(ok),
                                 errors: vec![],
                         },
-                        Err(err) => Self {
+                        Err((input, err)) => Self {
                                 input,
                                 output: None,
                                 errors: vec![err],
                         },
                 }
+        }
+
+        pub fn into_result(mut self) -> Result<O, E::Error> {
+                self.output
+                        .take()
+                        .ok_or_else(|| self.errors.pop().expect("huh"))
+        }
+        pub fn has_errors(&self) -> bool {
+                !self.errors.is_empty()
+        }
+        pub fn has_advanced(&self) -> bool {
+                !self.input.offset.is_zero()
         }
 }
 

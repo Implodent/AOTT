@@ -1,15 +1,15 @@
 use super::*;
 
 /// If [`I`] is `true`, outputs of [`A`] and [`B`] are collected into a tuple of `(a_out, b_out)`.
-/// If [`I`] is `false`, [`A`] is ran in check mode (no outputs produced), and only the output of [`B`] is returned.
+/// If [`I`] is `false`, and if [`AI`] is false, [`B`] is ran in check mode (no outputs produced), and only the output of [`A`] is returned; if [`AI`] is `true`, [`A`] is ignored; parsers are ran in order of [`A`] then [`B`].
 #[derive(Copy, Clone)]
-pub struct Then<O1, O2, A, B, const I: bool>(
+pub struct Then<O1, O2, A, B, const I: bool, const AI: bool>(
         pub(crate) A,
         pub(crate) B,
         pub(crate) core::marker::PhantomData<(O1, O2)>,
 );
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
-        Parser<I, (O1, O2), E> for Then<O1, O2, A, B, true>
+        Parser<I, (O1, O2), E> for Then<O1, O2, A, B, true, false>
 {
         fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, (O1, O2)> {
                 let (input, a) = self.0.parse(input)?;
@@ -23,7 +23,21 @@ impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I,
         }
 }
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
-        Parser<I, O2, E> for Then<O1, O2, A, B, false>
+        Parser<I, O1, E> for Then<O1, O2, A, B, false, false>
+{
+        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O1> {
+                let (input, a) = self.0.parse(input)?;
+                let (input, ()) = self.1.check(input)?;
+                Ok((input, a))
+        }
+        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+                let (input, ()) = self.0.check(input)?;
+                let (input, ()) = self.1.check(input)?;
+                Ok((input, ()))
+        }
+}
+impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
+        Parser<I, O2, E> for Then<O1, O2, A, B, false, true>
 {
         fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O2> {
                 let (input, ()) = self.0.check(input)?;
