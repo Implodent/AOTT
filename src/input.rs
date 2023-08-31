@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 use crate::{
         error::{Error, Located, Span},
-        parser::{Parser, ParserExtras, SimpleExtras},
-        stream::{Spanned, SpannedStream, Stream},
+        extra,
+        parser::{Parser, ParserExtras},
         text::Char,
 };
 use core::{
