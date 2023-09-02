@@ -114,6 +114,13 @@ pub struct InputOwned<I: InputType, E: ParserExtras<I> = extra::Err<I>> {
 }
 
 impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
+        pub fn from_input_with_context(input: I, context: E::Context) -> Self {
+                Self {
+                        input,
+                        cx: context,
+                        errors: Errors::default(),
+                }
+        }
         pub fn from_input(input: I) -> Self
         where
                 E::Context: Default,

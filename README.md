@@ -73,7 +73,7 @@ Parser combinators are also a great fit for domain-specific languages (DSLs), fo
 ## (**WIP**) Error recovery
 AOTT right now doesn't have error recovery, but it will soon have.
 There is already some code in place for recovery, but it is not used, nor documented, nor tested.
-
+    
 ## Compatibility
 
 AOTT is designed to be compatible with chumsky, so existing chumsky parsers will work / work with the minimum amount of changes (like removing lifetimes... *"ME HATE LIFETIME ARGUMENT! LIFETIME ARGUMENT BAD!"*).
