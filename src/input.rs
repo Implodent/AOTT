@@ -162,7 +162,7 @@ pub struct Input<'parse, I: InputType, E: ParserExtras<I> = extra::Err<I>> {
         // pub errors: &'parse mut Errors<I::Offset, E::Error>,
         // pub(crate) state: &'parse mut E::State,
         #[doc(hidden)]
-        pub(crate) cx: &'parse E::Context,
+        pub cx: &'parse E::Context,
 }
 
 impl<'parse, I: InputType, E: ParserExtras<I, Context = ()>> Input<'parse, I, E> {
