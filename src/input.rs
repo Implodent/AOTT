@@ -176,6 +176,18 @@ impl<'parse, I: InputType, E: ParserExtras<I, Context = ()>> Input<'parse, I, E>
 }
 
 impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
+        pub fn new_with_context(input: &'parse I, cx: &'parse E::Context) -> Self {
+                Self {
+                        offset: input.start(),
+                        input,
+                        cx,
+                }
+        }
+        /// Returns the context of the input.
+        pub fn context(&self) -> &'parse E::Context {
+                self.cx
+        }
+
         #[inline]
         pub(crate) fn skip_while(&mut self, mut f: impl FnMut(&I::Token) -> bool) {
                 loop {
