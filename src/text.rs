@@ -6,9 +6,10 @@ use crate::{
         error::{Error, Span},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
+        pfn_type,
         prelude::Parser,
         primitive::*,
-        IResult,
+        PResult,
 };
 
 mod private {
@@ -131,6 +132,8 @@ impl Char for u8 {
 }
 
 pub mod ascii {
+        use PResult;
+
         use super::*;
 
         /// A parser that accepts a C-style identifier.
@@ -140,27 +143,25 @@ pub mod ascii {
         ///
         /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
         /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
-        pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
-                inp: Input<'_, I, E>,
-        ) -> IResult<'_, I, E, &'a C::Str> {
+        #[parser(extras = E)]
+        pub fn ident<'c, I: StrInput<'c, C> + 'c, C: Char, E: ParserExtras<I> + 'c>(
+                inp: I,
+        ) -> &'c C::Str {
                 let before = inp.offset;
-                let (inp, cr) = any(inp)?;
+                let cr = inp.next()?;
                 let chr = cr.to_char();
                 let span = inp.span_since(before);
                 if !(chr.is_ascii_alphabetic() || chr == '_') {
-                        return Err((
-                                inp,
-                                Error::expected_token_found(
-                                        Span::new_usize(span),
-                                        vec![],
-                                        crate::MaybeDeref::Val(cr),
-                                ),
+                        return Err(Error::expected_token_found(
+                                Span::new_usize(span),
+                                vec![],
+                                crate::MaybeDeref::Val(cr),
                         ));
                 }
-                any.filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
+                filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
                         .repeated()
                         .slice()
-                        .parse(inp)
+                        .parse_with(inp)
         }
 
         /// # Panics
@@ -174,7 +175,7 @@ pub mod ascii {
                 Str: AsRef<C::Str> + 'a + Clone,
         >(
                 keyword: Str,
-        ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
+        ) -> impl Fn(&mut Input<I, E>) -> PResult<I, &'a C::Str, E>
         where
                 C::Str: PartialEq,
         {
@@ -192,20 +193,18 @@ pub mod ascii {
                 }
                 move |input| {
                         let before = input.offset;
-                        let (input, ident) = ident(input)?;
+                        let ident = ident(input)?;
                         if ident != keyword.as_ref() {
                                 let span = input.span_since(before);
-                                let err = Error::expected_token_found(
+                                return Err(Error::expected_token_found(
                                         Span::new_usize(span),
                                         vec![],
                                         crate::MaybeDeref::Val(unsafe {
                                                 input.input.next(before).1.unwrap_unchecked()
                                         }),
-                                );
-                                return Err((input, err));
+                                ));
                         }
-                        let slice = input.input.slice(input.span_since(before));
-                        Ok((input, slice))
+                        Ok(input.input.slice(input.span_since(before)))
                 }
         }
 }
@@ -240,14 +239,14 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
 /// # use aott::{prelude::*, text};
 /// let newline = text::newline::<_, extra::Err<&str>>();
 ///
-/// assert_eq!(newline.parse_from(&"\n").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\r").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\r\n").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\x0B").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\x0C").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\u{0085}").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\u{2028}").into_result(), Ok(()));
-/// assert_eq!(newline.parse_from(&"\u{2029}").into_result(), Ok(()));
+/// assert_eq!(newline.parse("\n"), Ok(()));
+/// assert_eq!(newline.parse("\r"), Ok(()));
+/// assert_eq!(newline.parse("\r\n"), Ok(()));
+/// assert_eq!(newline.parse_from("\x0B"), Ok(()));
+/// assert_eq!(newline.parse_from("\x0C"), Ok(()));
+/// assert_eq!(newline.parse_from("\u{0085}"), Ok(()));
+/// assert_eq!(newline.parse_from("\u{2028}"), Ok(()));
+/// assert_eq!(newline.parse_from("\u{2029}"), Ok(()));
 /// ```
 pub fn newline<I: InputType, E: ParserExtras<I>>() -> impl Parser<I, (), E>
 where
@@ -291,17 +290,15 @@ where
 /// Parses a sequence of characters, ignoring the character's case.
 pub fn just_ignore_case<
         'a,
-        'parse,
-        I: InputType,
+        I: InputType + StrInput<'a, C>,
+        C: Char + PartialEq + Clone,
         E: ParserExtras<I>,
         T: OrderedSeq<'a, I::Token> + Clone,
 >(
         seq: T,
-) -> impl Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, T>
-where
-        I::Token: Char + PartialEq + Clone + 'static,
-{
-        move |mut input| {
+) -> pfn_type!(I, &'a C::Str, E) {
+        move |input| {
+                let before = input.offset;
                 if let Some(err) = seq.seq_iter().find_map(|next| {
                         let befunge = input.offset;
                         let next = T::to_maybe_ref(next);
@@ -320,9 +317,9 @@ where
                                 )),
                         }
                 }) {
-                        Err((input, err))
+                        Err(err)
                 } else {
-                        Ok((input, seq.clone()))
+                        Ok(input.input.slice(input.span_since(before)))
                 }
         }
 }
@@ -335,6 +332,8 @@ use self::private::Sealed;
 pub mod unicode {
         use core::fmt::Display;
 
+        use crate::pfn_type;
+
         use super::*;
 
         /// A parser that accepts an identifier.
@@ -346,22 +345,17 @@ pub mod unicode {
         /// ```
         /// # use aott::prelude::*;
         /// let ident = text::ident::<&str, char, extra::Err<&str>>;
-        /// assert_eq!(ident.parse_from(&"defun").into_result(), Ok("defun"));
-        /// assert_eq!(ident.parse_from(&"fn").into_result(), Ok("fn"));
+        /// assert_eq!(ident.parse("defun"), Ok("defun"));
+        /// assert_eq!(ident.parse("fn"), Ok("fn"));
         /// ```
         #[parser(extras = E)]
         pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
                 input: I,
         ) -> &'a C::Str {
                 let before = input.offset;
-                let (mut input, ()) = filter(|c: &C| c.is_ident_start()).check(input)?;
-                input.skip_while(|c: &C| c.is_ident_continue());
-                eprintln!(
-                        "offset after parsing ident: {} vs before {before}",
-                        input.offset
-                );
-                let slice = input.input.slice(input.span_since(before));
-                Ok((input, slice))
+                filter(|c: &C| c.is_ident_start()).check_with(input)?;
+                skip_while(|c: &C| c.is_ident_continue())(input)?;
+                Ok(input.input.slice(input.span_since(before)))
         }
 
         /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
@@ -376,11 +370,11 @@ pub mod unicode {
         /// let def = text::unicode::keyword::<_, _, _, extra::Err<&str>>("def");
         ///
         /// // Exactly 'def' was found
-        /// assert_eq!(def.parse_from(&"def").into_result(), Ok("def"));
+        /// assert_eq!(def.parse("def"), Ok("def"));
         /// // Exactly 'def' was found, with non-identifier trailing characters
-        /// assert_eq!(def.parse_from(&"def(foo, bar)").into_result(), Ok("def"));
+        /// assert_eq!(def.parse("def(foo, bar)"), Ok("def"));
         /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
-        /// assert!(def.parse_from(&"define").has_errors());
+        /// assert!(def.parse("define").has_errors());
         /// ```
         #[track_caller]
         pub fn keyword<
@@ -391,7 +385,7 @@ pub mod unicode {
                 E: ParserExtras<I> + 'a,
         >(
                 keyword: Str,
-        ) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str>
+        ) -> pfn_type!(I, &'a C::Str, E)
         where
                 C::Str: PartialEq + Display,
         {
@@ -409,19 +403,17 @@ pub mod unicode {
                 }
                 move |input| {
                         let befunge = input.offset;
-                        let (input, s) = ident(input)?;
+                        let s = ident(input)?;
                         let span = input.span_since(befunge);
-                        eprintln!("[keyword] {s} =? {}", keyword.as_ref());
-                        if s == keyword.as_ref() {
-                                Ok((input, s))
-                        } else {
-                                let err = Error::expected_token_found(
+                        (s == keyword.as_ref()).then_some(s).ok_or_else(|| {
+                                Error::expected_token_found(
                                         Span::new_usize(span.clone()),
                                         vec![],
-                                        crate::MaybeDeref::Val(C::str_to_chars(s).next().unwrap()),
-                                );
-                                Err((input, err))
-                        }
+                                        crate::MaybeDeref::Val(
+                                                C::str_to_chars(s).next().expect("no keyword??"),
+                                        ),
+                                )
+                        })
                 }
         }
 }
@@ -439,13 +431,13 @@ pub mod unicode {
 /// # use aott::prelude::*;
 /// let digits = text::digits::<_, _, extra::Err<&str>>(10).slice();
 ///
-/// assert_eq!(digits.parse_from(&"0").into_result(), Ok("0"));
-/// assert_eq!(digits.parse_from(&"1").into_result(), Ok("1"));
-/// assert_eq!(digits.parse_from(&"01234").into_result(), Ok("01234"));
-/// assert_eq!(digits.parse_from(&"98345").into_result(), Ok("98345"));
+/// assert_eq!(digits.parse("0"), Ok("0"));
+/// assert_eq!(digits.parse("1"), Ok("1"));
+/// assert_eq!(digits.parse("01234"), Ok("01234"));
+/// assert_eq!(digits.parse("98345"), Ok("98345"));
 /// // A string of zeroes is still valid. Use `int` if this is not desirable.
-/// assert_eq!(digits.parse_from(&"0000").into_result(), Ok("0000"));
-/// assert!(digits.parse_from(&"").has_errors());
+/// assert_eq!(digits.parse("0000"), Ok("0000"));
+/// assert!(digits.parse("").has_errors());
 /// ```
 #[must_use]
 pub fn digits<C, I, E>(radix: u32) -> Repeated<impl Parser<I, C, E>, C>
@@ -470,10 +462,10 @@ where
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
         radix: u32,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, &'a C::Str> {
+) -> pfn_type!(I, &'a C::Str, E) {
         move |input| {
                 with_slice(input, move |input| {
-                        let (input, cr) = any(input)?;
+                        let cr = input.next()?;
                         let befunge = input.offset;
                         if !(cr.is_digit(radix) && cr != C::digit_zero()) {
                                 let err = Error::expected_token_found(
@@ -481,14 +473,14 @@ pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
                                         vec![],
                                         crate::MaybeDeref::Val(cr),
                                 );
-                                return Err((input, err));
+                                return Err(err);
                         }
                         // hehe
                         any.filter(move |cr: &C| cr.is_digit(radix))
                                 .repeated()
                                 .ignored()
                                 .or(just(C::digit_zero()).ignored())
-                                .check(input)
+                                .check_with(input)
                 })
         }
 }
@@ -519,18 +511,19 @@ impl<
                 A: Parser<I, O, E>,
         > Parser<I, O, E> for Padded<A, C>
 {
-        fn check<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                input.skip_while(Char::is_whitespace);
-                let (mut input, ()) = self.0.check(input)?;
-                input.skip_while(Char::is_whitespace);
-                Ok((input, ()))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+                let sw = skip_while(Char::is_whitespace);
+                sw(input)?;
+                let output = self.0.parse_with(input)?;
+                sw(input)?;
+                Ok(output)
         }
-
-        fn parse<'parse>(&self, mut input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
-                input.skip_while(Char::is_whitespace);
-                let (mut input, output) = self.0.parse(input)?;
-                input.skip_while(Char::is_whitespace);
-                Ok((input, output))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                let sw = skip_while(Char::is_whitespace);
+                sw(input)?;
+                self.0.check_with(input)?;
+                sw(input)?;
+                Ok(())
         }
 }
 /// A parser that accepts (and ignores) any number of whitespace characters.
@@ -544,13 +537,13 @@ impl<
 /// let whitespace = text::whitespace::<_, _, extra::Err<&str>>();
 ///
 /// // Any amount of whitespace is parsed...
-/// assert_eq!(whitespace.parse_from(&"\t \n  \r ").into_result(), Ok(()));
+/// assert_eq!(whitespace.parse("\t \n  \r "), Ok(()));
 /// // ...including none at all!
-/// assert_eq!(whitespace.parse_from(&"").into_result(), Ok(()));
+/// assert_eq!(whitespace.parse(""), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
 ) -> impl Parser<I, (), E> {
-        any.filter(|c: &I::Token| c.is_whitespace())
+        filter(|c: &I::Token| c.is_whitespace())
                 .ignored()
                 .repeated()
                 .ignored()
@@ -565,18 +558,18 @@ pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I
 ///
 /// ```
 /// # use aott::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<&str>>();
+/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<&str>>;
 ///
 /// // Any amount of inline whitespace is parsed...
-/// assert_eq!(inline_whitespace.parse_from(&"\t  ").into_result(), Ok(()));
+/// assert_eq!(inline_whitespace.parse("\t  "), Ok(()));
 /// // ...including none at all!
-/// assert_eq!(inline_whitespace.parse_from(&"").into_result(), Ok(()));
+/// assert_eq!(inline_whitespace.parse(""), Ok(()));
 /// // ... but not newlines
-/// assert!(inline_whitespace.at_least(1).parse_from(&"\n\r").has_errors());
+/// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, (), ()> {
-        any.filter(|c: &I::Token| c.is_inline_whitespace())
+        filter(|c: &I::Token| c.is_inline_whitespace())
                 .ignored()
                 .repeated_custom()
 }

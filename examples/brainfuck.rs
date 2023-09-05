@@ -12,7 +12,7 @@ enum Instruction {
 }
 
 #[parser]
-fn parse(input: &str) -> Vec<Instruction> {
+fn bf_file(input: &str) -> Vec<Instruction> {
         choice((
                 // Basic instructions are just single characters!
                 just('<').to(Instruction::Left),
@@ -22,11 +22,11 @@ fn parse(input: &str) -> Vec<Instruction> {
                 just(',').to(Instruction::Read),
                 just('.').to(Instruction::Write),
                 // recursion is easy: just put in the function as is!
-                delimited(just('['), parse, just(']')).map(Instruction::Loop),
+                delimited(just('['), bf_file, just(']')).map(Instruction::Loop),
         ))
         // Brainfuck is sequential, so we parse as many instructions as is possible
         .repeated()
-        .parse(input)
+        .parse_with(input)
 }
 
 const TAPE_LENGTH: usize = 10_000;
@@ -65,10 +65,11 @@ fn main() {
         //         std::fs::read_to_string(std::env::args().nth(1).expect("Expected file argument"))
         //                 .expect("Failed to read file");
 
+        #[allow(clippy::useless_asref)]
         let input = input_.as_ref();
 
         println!("Brainfuck input: {input}");
-        let result = parse.parse_from(&input).into_result();
+        let result = bf_file.parse(input);
         match result {
                 Ok(ok) => {
                         println!("Parsed Brainfuck AST: {ok:#?}");

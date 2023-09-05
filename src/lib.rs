@@ -27,7 +27,7 @@ pub mod prelude {
         #[cfg(feature = "builtin-bytes")]
         pub use crate::bytes;
         pub use crate::derive::parser;
-        pub use crate::error::{Error, IResult, Span};
+        pub use crate::error::{Error, PResult, Span};
         pub use crate::extra;
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
@@ -39,7 +39,14 @@ pub mod prelude {
         pub use crate::text;
 }
 
-pub use error::IResult;
+#[macro_export]
+macro_rules! pfn_type {
+        ($input:ty, $output:ty, $extras:ty) => {
+                impl Fn(&mut $crate::input::Input<$input, $extras>) -> $crate::PResult<$input, $output, $extras>
+        };
+}
+
+pub use error::PResult;
 
 pub enum MaybeDeref<T, R: Deref<Target = T>> {
         Ref(R),

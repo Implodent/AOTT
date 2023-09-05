@@ -50,25 +50,19 @@ impl<'a, I: InputType, O, E: ParserExtras<I>> Clone for Recursive<'a, I, O, E> {
 }
 
 impl<'a, I: InputType, O, E: ParserExtras<I>> Parser<I, O, E> for Recursive<'a, I, O, E> {
-        fn check<'parse>(
-                &self,
-                input: crate::input::Input<'parse, I, E>,
-        ) -> crate::IResult<'parse, I, E, ()> {
+        fn check_with(&self, input: &mut crate::input::Input<I, E>) -> crate::PResult<I, (), E> {
                 self.cell()
                         .get()
                         .expect("Recursive parser used before definition")
                         .as_ref()
-                        .check(input)
+                        .check_with(input)
         }
 
-        fn parse<'parse>(
-                &self,
-                input: crate::input::Input<'parse, I, E>,
-        ) -> crate::IResult<'parse, I, E, O> {
+        fn parse_with(&self, input: &mut crate::input::Input<I, E>) -> crate::PResult<I, O, E> {
                 self.cell()
                         .get()
                         .expect("Recursive parser used before definition")
                         .as_ref()
-                        .parse(input)
+                        .parse_with(input)
         }
 }

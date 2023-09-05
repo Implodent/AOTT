@@ -1,13 +1,15 @@
+use crate::pfn_type;
+
 use super::*;
 
 /// Parses a sequence of tokens [`seq`].
 pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
         seq: T,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, T>
+) -> pfn_type!(I, T, E)
 where
         I::Token: PartialEq + Clone + 'static,
 {
-        move |mut input| {
+        move |input| {
                 if let Some(err) = seq.seq_iter().find_map(|next| {
                         let befunge = input.offset;
                         let next = T::to_maybe_ref(next);
@@ -20,9 +22,9 @@ where
                                 )),
                         }
                 }) {
-                        Err((input, err))
+                        Err(err)
                 } else {
-                        Ok((input, seq.clone()))
+                        Ok(seq.clone())
                 }
         }
 }

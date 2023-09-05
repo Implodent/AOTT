@@ -9,19 +9,19 @@ where
         A: Parser<I, O, E>,
         B: Parser<I, O, E>,
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let befunge = input.save();
-                self.0.check(input).or_else(|(mut input, _)| {
+                self.0.check_with(input).or_else(|_| {
                         input.rewind(befunge);
-                        self.1.check(input)
+                        self.1.check_with(input)
                 })
         }
 
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
                 let befunge = input.save();
-                self.0.parse(input).or_else(|(mut input, _)| {
+                self.0.parse_with(input).or_else(|_| {
                         input.rewind(befunge);
-                        self.1.parse(input)
+                        self.1.parse_with(input)
                 })
         }
 }
@@ -35,12 +35,11 @@ pub struct Map<A, O, F, U>(
 impl<I: InputType, O, E: ParserExtras<I>, U, A: Parser<I, O, E>, F: Fn(O) -> U> Parser<I, U, E>
         for Map<A, O, F, U>
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)
         }
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, U> {
-                self.0.parse(input)
-                        .map(|(input, thing)| (input, self.2(thing)))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
+                self.0.parse_with(input).map(&self.2)
         }
 }
 
@@ -48,12 +47,11 @@ pub struct To<A, O, U>(pub(crate) A, pub(crate) U, pub(crate) PhantomData<O>);
 impl<I: InputType, O, E: ParserExtras<I>, U: Clone, A: Parser<I, O, E>> Parser<I, U, E>
         for To<A, O, U>
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)
         }
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, U> {
-                self.0.check(input)
-                        .map(|(input, ())| (input, self.1.clone()))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
+                self.0.check_with(input).map(|_| self.1.clone())
         }
 }
 
@@ -72,20 +70,12 @@ impl<
                 A: Parser<I, O, E>,
         > Parser<I, U, E> for TryMap<A, F, O, U>
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.parse(input)
-                        .and_then(|(input, thing)| match self.1(thing) {
-                                Ok(_) => Ok((input, ())),
-                                Err(e) => Err((input, e)),
-                        })
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.parse_with(input).and_then(&self.1).map(|_| {})
         }
 
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, U> {
-                self.0.parse(input)
-                        .and_then(|(input, thing)| match self.1(thing) {
-                                Ok(ok) => Ok((input, ok)),
-                                Err(e) => Err((input, e)),
-                        })
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
+                self.0.parse_with(input).and_then(|thing| self.1(thing))
         }
 }
 
@@ -104,23 +94,15 @@ impl<
                 A: Parser<I, O, E>,
         > Parser<I, U, E> for TryMapWithSpan<A, F, O, U>
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let befunge = input.offset;
-                self.0.parse(input).and_then(|(input, thing)| {
-                        match self.1(thing, input.span_since(befunge)) {
-                                Ok(_) => Ok((input, ())),
-                                Err(e) => Err((input, e)),
-                        }
-                })
+                self.0.parse_with(input)
+                        .and_then(|thing| self.1(thing, input.span_since(befunge)).map(|_| {}))
         }
 
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, U> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
                 let befunge = input.offset;
-                self.0.parse(input).and_then(|(input, thing)| {
-                        match self.1(thing, input.span_since(befunge)) {
-                                Ok(ok) => Ok((input, ok)),
-                                Err(e) => Err((input, e)),
-                        }
-                })
+                self.0.parse_with(input)
+                        .and_then(|thing| self.1(thing, input.span_since(befunge)))
         }
 }

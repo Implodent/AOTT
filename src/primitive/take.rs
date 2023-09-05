@@ -1,6 +1,6 @@
 use core::{mem::MaybeUninit, ops::RangeTo};
 
-use crate::MaybeUninitExt;
+use crate::{pfn_type, MaybeUninitExt};
 
 use super::*;
 
@@ -28,8 +28,8 @@ impl TakeAmount for RangeTo<usize> {
 
 pub fn take<I: InputType, E: ParserExtras<I>>(
         amount: impl TakeAmount,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, Vec<I::Token>> {
-        move |mut input| {
+) -> pfn_type!(I, Vec<I::Token>, E) {
+        move |input| {
                 let before = input.offset;
                 let range = amount.range();
                 let mut result = vec![];
@@ -38,13 +38,9 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                         if range.end < n {
                                 break;
                         }
-                        match input.next_or_eof() {
-                                Ok(token) => {
-                                        n += 1;
-                                        result.push(token);
-                                }
-                                Err(error) => return Err((input, error)),
-                        }
+
+                        n += 1;
+                        result.push(input.next()?);
                 }
                 if n < range.start {
                         let error = Error::expected_token_found(
@@ -54,9 +50,9 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                                         input.input.next(before).1.expect("no token??")
                                 }),
                         );
-                        Err((input, error))
+                        Err(error)
                 } else {
-                        Ok((input, result))
+                        Ok(result)
                 }
         }
 }
@@ -65,29 +61,21 @@ pub struct TakeExact<const A: usize>(usize);
 impl<I: InputType, E: ParserExtras<I>, const A: usize> Parser<I, [I::Token; A], E>
         for TakeExact<A>
 {
-        fn parse<'parse>(
-                &self,
-                mut inp: Input<'parse, I, E>,
-        ) -> IResult<'parse, I, E, [I::Token; A]> {
+        fn parse_with<'parse>(&self, inp: &mut Input<I, E>) -> PResult<I, [I::Token; A], E> {
                 let mut result: [MaybeUninit<I::Token>; A] = MaybeUninitExt::uninit_array();
 
                 for i in 0..A {
-                        result[i] = MaybeUninit::new(match inp.next_or_eof() {
-                                Ok(ok) => ok,
-                                Err(e) => return Err((inp, e)),
-                        });
+                        result[i] = MaybeUninit::new(inp.next()?);
                 }
 
-                Ok((inp, unsafe { MaybeUninitExt::array_assume_init(result) }))
+                Ok(unsafe { MaybeUninitExt::array_assume_init(result) })
         }
-        fn check<'parse>(&self, mut inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+        fn check_with(&self, inp: &mut Input<I, E>) -> PResult<I, (), E> {
                 for _ in 0..A {
-                        if let Err(e) = inp.next_or_eof() {
-                                return Err((inp, e));
-                        }
+                        inp.next()?;
                 }
 
-                Ok((inp, ()))
+                Ok(())
         }
 }
 

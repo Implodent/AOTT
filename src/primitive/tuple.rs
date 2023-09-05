@@ -11,58 +11,48 @@ pub struct Then<O1, O2, A, B, const I: bool, const AI: bool>(
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, (O1, O2), E> for Then<O1, O2, A, B, true, false>
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, (O1, O2)> {
-                let (input, a) = self.0.parse(input)?;
-                let (input, b) = self.1.parse(input)?;
-                Ok((input, (a, b)))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (O1, O2), E> {
+                Ok((self.0.parse_with(input)?, self.1.parse_with(input)?))
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                let (input, ()) = self.0.check(input)?;
-                let (input, ()) = self.0.check(input)?;
-                Ok((input, ()))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)?;
+                self.1.check_with(input)
         }
 }
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, O1, E> for Then<O1, O2, A, B, false, false>
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O1> {
-                let (input, a) = self.0.parse(input)?;
-                let (input, ()) = self.1.check(input)?;
-                Ok((input, a))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O1, E> {
+                let a = self.0.parse_with(input)?;
+                self.1.check_with(input)?;
+                Ok(a)
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                let (input, ()) = self.0.check(input)?;
-                let (input, ()) = self.1.check(input)?;
-                Ok((input, ()))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)?;
+                self.1.check_with(input)?;
+                Ok(())
         }
 }
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, O2, E> for Then<O1, O2, A, B, false, true>
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O2> {
-                let (input, ()) = self.0.check(input)?;
-                let (input, b) = self.1.parse(input)?;
-                Ok((input, b))
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O2, E> {
+                self.0.check_with(input)?;
+                self.1.parse_with(input)
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                let (input, ()) = self.0.check(input)?;
-                let (input, ()) = self.1.check(input)?;
-                Ok((input, ()))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)?;
+                self.1.check_with(input)
         }
-}
-
-/// See [`tuple`].
-#[derive(Copy, Clone)]
-pub struct Tuple<T> {
-        parsers: T,
 }
 
 /// Parse using a tuple of many parsers, producing a tuple of outputs if all successfully parse,
 /// otherwise returning an error if any parsers fail.
 ///
 /// This parser is to [`Parser::then`] as [`choice`] is to [`Parser::or`]
-pub const fn tuple<T>(parsers: T) -> Tuple<T> {
-        Tuple { parsers }
+#[deprecated(since = "0.3.0", note = "just use the tuple")]
+pub const fn tuple<T>(parsers: T) -> T {
+        parsers
 }
 
 // impl<I, O, E, P, const N: usize> Parser<I, [O; N], E> for Tuple<[P; N]>
@@ -135,32 +125,32 @@ macro_rules! impl_tuple_for_tuple {
     };
     (~ $($X:ident $O:ident)*) => {
         #[allow(unused_variables, non_snake_case)]
-        impl<I, E, $($X),*, $($O),*> Parser<I, ($($O,)*), E> for Tuple<($($X,)*)>
+        impl<I, E, $($X),*, $($O),*> Parser<I, ($($O,)*), E> for ($($X,)*)
         where
             I: InputType,
             E: ParserExtras<I>,
             $($X: Parser<I, $O, E>),*
         {
             #[inline]
-            fn parse<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ($($O,)*)> {
-                let Tuple { parsers: ($($X,)*) } = self;
+            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<I, ($($O,)*), E> {
+                let ($($X,)*) = self;
 
                 $(
-                    let (inp, $X) = $X.parse(inp)?;
+                    let $X = $X.parse_with(inp)?;
                 )*
 
-                Ok((inp, flatten_map!(<Emit> $($X)*)))
+                Ok(flatten_map!(<Emit> $($X)*))
             }
 
             #[inline]
-            fn check<'parse>(&self, inp: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                let Tuple { parsers: ($($X,)*) } = self;
+            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<I, (), E> {
+                let ($($X,)*) = self;
 
                 $(
-                    let (inp, $X) = $X.parse(inp)?;
+                    $X.check_with(inp)?;
                 )*
 
-                Ok((inp, ()))
+                Ok(())
             }
         }
     };

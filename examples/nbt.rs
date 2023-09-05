@@ -97,7 +97,7 @@ enum Nbt {
 fn nbt(input: &[u8]) -> Nbt {
         let (input, tag) = filter(|n: &u8| *n < 12)
                 .map(|n| NbtTag::from_u8(n).unwrap())
-                .parse(input)?;
+                .parse_with(input)?;
 
         if tag == NbtTag::End {
                 return Ok((
@@ -114,10 +114,10 @@ fn nbt(input: &[u8]) -> Nbt {
         let (input, name_len) = big::u16.map(|u| u as usize).parse(input)?;
         let (input, name) = take(name_len)
                 .map(|utf8| unsafe { String::from_utf8_unchecked(utf8) })
-                .parse(input)?;
+                .parse_with(input)?;
 
         if let Some(fixed_length) = tag.payload_len() {
-                let (input, payload) = take(fixed_length).parse(input)?;
+                let (input, payload) = take(fixed_length).parse_with(input)?;
 
                 Ok((
                         input,
@@ -140,7 +140,7 @@ fn nbt(input: &[u8]) -> Nbt {
                         Str => {
                                 let (input, len) = big::u16(input)?;
                                 let len = len as usize;
-                                take(len).map(|s| (len, s)).parse(input)?
+                                take(len).map(|s| (len, s)).parse_with(input)?
                         }
                 };
 

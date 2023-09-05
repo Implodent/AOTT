@@ -99,6 +99,7 @@ impl<T, E> Located<T, E> {
         }
 }
 
+#[deprecated(since = "0.3.0", note = "stop. get some help.")]
 // #[derive(Debug)]
 pub struct ParseResult<'parse, I: InputType, O, E: ParserExtras<I>> {
         pub input: Input<'parse, I, E>,
@@ -106,6 +107,7 @@ pub struct ParseResult<'parse, I: InputType, O, E: ParserExtras<I>> {
         pub errors: Vec<E::Error>,
 }
 
+#[allow(deprecated)]
 impl<'parse, I: InputType, O, E: ParserExtras<I>> ParseResult<'parse, I, O, E> {
         pub fn single(result: IResult<'parse, I, E, O>) -> Self {
                 match result {
@@ -135,5 +137,11 @@ impl<'parse, I: InputType, O, E: ParserExtras<I>> ParseResult<'parse, I, O, E> {
         }
 }
 
+#[deprecated(
+        since = "0.3.0",
+        note = "no longer used after redesign; consider using PResult<I, O, E>"
+)]
 pub type IResult<'parse, I, E, O> =
         Result<(Input<'parse, I, E>, O), (Input<'parse, I, E>, <E as ParserExtras<I>>::Error)>;
+
+pub type PResult<I, O, E = crate::extra::Err<I>> = Result<O, <E as ParserExtras<I>>::Error>;
