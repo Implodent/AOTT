@@ -108,7 +108,7 @@ pub mod mode {
 
                 #[inline(always)]
                 fn invoke_unbind<T, F: FnMut(T)>(mut f: F, output: Self::Output<T>) {
-                        f(output)
+                        f(output);
                 }
                 #[inline(always)]
                 fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
@@ -356,14 +356,14 @@ pub trait ParserExtras<I: InputType> {
 
         #[deprecated(since = "0.3.0", note = "together with ParseResult")]
         #[allow(deprecated)]
-        fn recover<'parse, O>(
+        fn recover<O>(
                 _error: Self::Error,
                 _context: Self::Context,
-                input: Input<'parse, I, Self>,
+                input: Input<'_, I, Self>,
                 prev_output: Option<O>,
                 // Errors.secondary
                 prev_errors: Vec<Self::Error>,
-        ) -> ParseResult<'parse, I, O, Self>
+        ) -> ParseResult<'_, I, O, Self>
         where
                 Self: Sized,
         {

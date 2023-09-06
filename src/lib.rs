@@ -25,7 +25,7 @@ pub mod primitive;
 pub mod recovery;
 pub mod stream;
 pub use aott_derive as derive;
-// #[cfg(feature = "serialization")]
+#[cfg(feature = "serialization")]
 pub mod ser;
 
 #[cfg(feature = "builtin-text")]
@@ -42,6 +42,8 @@ pub mod prelude {
         };
         pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;
+        #[cfg(feature = "serialization")]
+        pub use crate::ser::*;
         pub use crate::stream::Stream;
         #[cfg(feature = "builtin-text")]
         pub use crate::text;

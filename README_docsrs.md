@@ -69,4 +69,5 @@ If you are developing, say, a programming language, or even just starting out, y
 
 Parser combinators solve both problems by providing an ergonomic API that allows for rapidly iterating upon a syntax.
 
-  * [x] Parser combinators are also a great fit for domain-specific languages (DSLs), for which there is no existing parser. Writing a reliable, fault-tolerant parser for such situations can go from being a weeks-long task to a half-hour long task, if you employ a decent parser combinator library.
+Parser combinators are also a great fit for domain-specific languages (DSLs), for which there is no existing parser.
+Writing a reliable, fault-tolerant parser for such situations can go from being a weeks-long task to a half-hour long task, if you employ a decent parser combinator library.

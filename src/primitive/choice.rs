@@ -1,49 +1,3 @@
-//! Parse using a tuple of many parsers, producing the output of the first to successfully parse.
-//!
-//! This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
-//!
-//! - Rust's trait solver seems to resolve the [`Parser`] impl for this type much faster, significantly reducing
-//!   compilation times.
-//!
-//! - Parsing is likely a little faster in some cases because the resulting parser is 'less careful' about error
-//!   routing, and doesn't perform the same fine-grained error prioritization that [`Parser::or`] does.
-//!
-//! These qualities make this parser ideal for lexers.
-//!
-//! The output type of this parser is the output type of the inner parsers.
-//!
-//! # Examples
-//!
-//! ```nodoc
-//! # use aott::prelude::*;
-//! #[derive(Clone, Debug, PartialEq)]
-//! enum Token {
-//!     If,
-//!     For,
-//!     While,
-//!     Fn,
-//!     Int(u64),
-//!     Ident(&'a str),
-//! }
-//!
-//! let tokens = (
-//!     text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
-//!     text::ascii::keyword("for").to(Token::For),
-//!     text::ascii::keyword("while").to(Token::While),
-//!     text::ascii::keyword("fn").to(Token::Fn),
-//!     text::int(10).from_str().unwrapped().map(Token::Int),
-//!     text::ascii::ident().map(Token::Ident),
-//! )
-//!     .padded()
-//!     .repeated()
-//!     .collect::<Vec<_>>();
-//!
-//! use Token::*;
-//! assert_eq!(
-//!     tokens.parse("if 56 for foo while 42 fn bar"),
-//!     Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
-//! );
-//! ```
 use super::*;
 
 #[derive(Copy, Clone)]
@@ -51,6 +5,52 @@ pub struct Choice<T> {
         parsers: T,
 }
 
+/// Parse using a tuple of many parsers, producing the output of the first to successfully parse.
+///
+/// This primitive has a twofold improvement over a chain of [`Parser::or`] calls:
+///
+/// - Rust's trait solver seems to resolve the [`Parser`] impl for this type much faster, significantly reducing
+///   compilation times.
+///
+/// - Parsing is likely a little faster in some cases because the resulting parser is 'less careful' about error
+///   routing, and doesn't perform the same fine-grained error prioritization that [`Parser::or`] does.
+///
+/// These qualities make this parser ideal for lexers.
+///
+/// The output type of this parser is the output type of the inner parsers.
+///
+/// # Examples
+///
+/// ```nodoc
+/// # use aott::prelude::*;
+/// #[derive(Clone, Debug, PartialEq)]
+/// enum Token {
+///     If,
+///     For,
+///     While,
+///     Fn,
+///     Int(u64),
+///     Ident(&'a str),
+/// }
+///
+/// let tokens = (
+///     text::ascii::keyword::<_, _, _, extra::Err<Simple<char>>>("if").to(Token::If),
+///     text::ascii::keyword("for").to(Token::For),
+///     text::ascii::keyword("while").to(Token::While),
+///     text::ascii::keyword("fn").to(Token::Fn),
+///     text::int(10).from_str().unwrapped().map(Token::Int),
+///     text::ascii::ident().map(Token::Ident),
+/// )
+///     .padded()
+///     .repeated()
+///     .collect::<Vec<_>>();
+///
+/// use Token::*;
+/// assert_eq!(
+///     tokens.parse("if 56 for foo while 42 fn bar"),
+///     Ok(vec![If, Int(56), For, Ident("foo"), While, Int(42), Fn, Ident("bar")]),
+/// );
+/// ```
 pub const fn choice<T>(parsers: T) -> Choice<T> {
         Choice { parsers }
 }
