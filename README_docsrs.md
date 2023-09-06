@@ -4,13 +4,13 @@
 [![crates.io](https://docs.rs/aott/badge.svg)](https://docs.rs/aott)
 [![License](https://img.shields.io/crates/l/aott.svg)](https://github.com/Implodent/AOTT)
 [![Discord](https://img.shields.io/discord/1027291338548445304)](https://discord.gg/k9vTZNtPGX)
-
+    
 AOTT is a parser combinator framework - a library that contains utilities for painlessly creating parsers.
 
 It also includes a few built-in utilities,
 like parsers for working with text (see [`text`](./src/text.rs) module; feature gated under flag `builtin-text`, enabled by default),
 and several handy decoders for working with bytes (see [`bytes`](./src/bytes.rs) module; feature gated under flag `builtin-bytes`, not enabled by default).
-
+        
 ## Features
 - 🪄 **Expressive built-in combinators** that make writing your parser a joy
 - 🎛 **Fully generic** across input, token, output, span, and error types
@@ -69,24 +69,4 @@ If you are developing, say, a programming language, or even just starting out, y
 
 Parser combinators solve both problems by providing an ergonomic API that allows for rapidly iterating upon a syntax.
 
-Parser combinators are also a great fit for domain-specific languages (DSLs), for which there is no existing parser. Writing a reliable, fault-tolerant parser for such situations can go from being a weeks-long task to a half-hour long task, if you employ a decent parser combinator library.
-
-## (**WIP**) Error recovery
-AOTT right now doesn't have error recovery, but it will soon have.
-There is already some code in place for recovery, but it is not used, nor documented, nor tested.
-    
-## Compatibility
-
-AOTT is designed to be compatible with chumsky, so existing chumsky parsers will work / work with the minimum amount of changes (like removing lifetimes... *"ME HATE LIFETIME ARGUMENT! LIFETIME ARGUMENT BAD!"*).
-A list of regexes to fix the parsers will be provided <del>never</del> soon.
-About those lifetime arguments. I wanted to make a near lifetimeless chumsky
-with functions as the primary unit of parsing (like in nom!), and after hours of <del>pain and agony</del> hard work I have this. A near lifetimeless chumsky with functions. Yay.
-
-## Thank you to
-
-- [@zesterer](https://github.com/zesterer) for amazing work on [chumsky](https://github.com/zesterer/chumsky) and help in the Rust Community Discord server
-- All [nom](https://github.com/rust-bakery/nom) contributors for their truly inspirational parser combinator framework library
-- [@abs0luty](https://github.com/abs0luty) for his help at the early stages of the library and ideas for potential features.
-
-## License
-Aspect Of The Tokens is licensed under the MIT license (see the [`LICENSE`](./LICENSE) file in the root of the repository)
+  * [x] Parser combinators are also a great fit for domain-specific languages (DSLs), for which there is no existing parser. Writing a reliable, fault-tolerant parser for such situations can go from being a weeks-long task to a half-hour long task, if you employ a decent parser combinator library.

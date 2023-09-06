@@ -17,6 +17,10 @@ pub trait InputType {
         type Offset: Copy + Hash + Ord + Into<usize> + Zero + One;
         type Token;
 
+        /// The owned type containing Self that allows mutation
+        #[doc(hidden)]
+        type OwnedMut;
+
         #[doc(hidden)]
         fn start(&self) -> Self::Offset;
 
@@ -34,6 +38,8 @@ pub trait InputType {
 impl<'a> InputType for &'a str {
         type Token = char;
         type Offset = usize;
+
+        type OwnedMut = String;
 
         #[inline]
         fn start(&self) -> Self::Offset {
@@ -65,6 +71,7 @@ impl<'a> InputType for &'a str {
 impl<'a, T: Clone> InputType for &'a [T] {
         type Offset = usize;
         type Token = T;
+        type OwnedMut = Vec<T>;
 
         unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
                 if offset < self.len() {
@@ -72,6 +79,32 @@ impl<'a, T: Clone> InputType for &'a [T] {
                         //         We only ever return offsets that are at a character boundary
                         let tok = unsafe { self.get_unchecked(offset) };
                         (offset + 1, Some(tok.clone()))
+                } else {
+                        (offset, None)
+                }
+        }
+
+        fn start(&self) -> Self::Offset {
+                0
+        }
+
+        fn prev(offset: Self::Offset) -> Self::Offset {
+                offset.saturating_sub(1)
+        }
+}
+
+#[cfg(feature = "bytes-crate")]
+impl InputType for ::bytes::Bytes {
+        type Offset = usize;
+        type Token = u8;
+        type OwnedMut = ::bytes::BytesMut;
+
+        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+                if offset < self.len() {
+                        // SAFETY: `offset < self.len()` above guarantees offset is in-bounds
+                        //         We only ever return offsets that are at a character boundary
+                        let tok = unsafe { self.get_unchecked(offset) };
+                        (offset + 1, Some(*tok))
                 } else {
                         (offset, None)
                 }
@@ -217,7 +250,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
         /// Save the current parse state as a [`Marker`].
         ///
-        /// You can rewind back to this state later with [`InputRef::rewind`].
+        /// You can rewind back to this state later with [`Self::rewind`].
         #[inline(always)]
         pub fn save(&self) -> Marker<I> {
                 Marker {
@@ -228,7 +261,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
 
         /// Reset the parse state to that represented by the given [`Marker`].
         ///
-        /// You can create a marker with which to perform rewinding using [`InputRef::save`].
+        /// You can create a marker with which to perform rewinding using [`Self::save`].
         /// Using a marker from another input is UB. Your parser may explode. You may get a panic.
         #[inline(always)]
         pub fn rewind(&mut self, marker: Marker<I>) {

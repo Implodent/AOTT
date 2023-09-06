@@ -8,7 +8,7 @@ use crate::{
         error::{Error, Span},
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
-        EmptyPhantom, MaybeRef, PResult,
+        pfn_type, EmptyPhantom, MaybeRef, PResult,
 };
 
 mod choice;
@@ -65,7 +65,7 @@ impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
 /// # use aott::prelude::*;
 /// let input = "eof";
 /// let parser = just("eof").then_ignore(end::<_, extra::Err<_>>);
-/// assert_eq!(parser.parse_from(&input).into_result(), Ok("eof"));
+/// assert_eq!(parser.parse(input), Ok("eof"));
 /// ```
 pub fn end<I: InputType, E: ParserExtras<I>>(input: I) {
         let offset = input.offset;
@@ -89,7 +89,7 @@ pub fn end<I: InputType, E: ParserExtras<I>>(input: I) {
 /// # use aott::prelude::*;
 /// let parser = maybe::<&str, extra::Err<&str>, _, _>(just("domatch"));
 /// let input = "dontmatch";
-/// assert_eq!(parser.parse_from(&input).into_result(), Ok(None));
+/// assert_eq!(parser.parse(input), Ok(None));
 /// ```
 pub fn maybe<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(parser: A) -> Maybe<A> {
         Maybe(parser)
@@ -101,13 +101,17 @@ pub fn maybe<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(parser: A)
 /// **Note** This parser does not allocate. It uses the [`Input::skip_while`] function, which does not allocate. You are safe to use this in `check_with` functions.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// // snipped from text module
+/// let sw = skip_while(Char::is_whitespace);
+/// sw(input)?;
+/// let output = self.0.parse_with(input)?;
+/// sw(input)?;
+/// Ok(output)
 /// ```
-#[must_use]
 pub fn skip_while<I: InputType, E: ParserExtras<I>, F: Fn(&I::Token) -> bool>(
         filter: F,
-) -> impl Fn(&mut Input<I, E>) -> PResult<I, (), E> {
+) -> pfn_type!(I, (), E) {
         move |input| {
                 input.skip_while(&filter);
                 Ok(())
@@ -119,9 +123,19 @@ pub struct Maybe<A>(pub(crate) A);
 
 impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O>, E> for Maybe<A> {
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, Option<O>, E> {
-                Ok(self.0.parse_with(input).map_or(None, Some))
+                let befunge = input.save();
+                Ok(self.0.parse_with(input).map_or_else(
+                        |_| {
+                                input.rewind(befunge);
+                                None
+                        },
+                        Some,
+                ))
         }
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                Ok(self.0.check_with(input).unwrap_or(()))
+                let befunge = input.save();
+                self.0.check_with(input)
+                        .unwrap_or_else(|_| input.rewind(befunge));
+                Ok(())
         }
 }

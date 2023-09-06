@@ -237,27 +237,29 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
 ///
 /// ```
 /// # use aott::{prelude::*, text};
-/// let newline = text::newline::<_, extra::Err<&str>>();
+/// let newline = text::newline::<_, extra::Err<&str>>;
 ///
 /// assert_eq!(newline.parse("\n"), Ok(()));
 /// assert_eq!(newline.parse("\r"), Ok(()));
 /// assert_eq!(newline.parse("\r\n"), Ok(()));
-/// assert_eq!(newline.parse_from("\x0B"), Ok(()));
-/// assert_eq!(newline.parse_from("\x0C"), Ok(()));
-/// assert_eq!(newline.parse_from("\u{0085}"), Ok(()));
-/// assert_eq!(newline.parse_from("\u{2028}"), Ok(()));
-/// assert_eq!(newline.parse_from("\u{2029}"), Ok(()));
+/// assert_eq!(newline.parse("\x0B"), Ok(()));
+/// assert_eq!(newline.parse("\x0C"), Ok(()));
+/// assert_eq!(newline.parse("\u{0085}"), Ok(()));
+/// assert_eq!(newline.parse("\u{2028}"), Ok(()));
+/// assert_eq!(newline.parse("\u{2029}"), Ok(()));
 /// ```
-pub fn newline<I: InputType, E: ParserExtras<I>>() -> impl Parser<I, (), E>
+#[parser(extras = E)]
+pub fn newline<I: InputType, E: ParserExtras<I>>(input: I)
 where
         I::Token: Char + PartialEq,
 {
         // parses \r, which is either the OSX newline, or the start of a Windows newline (\r\n)
         (cr.optional().ignore_then(lf)) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
-                .or(any.filter(|cr: &I::Token| {
+                .or(filter(|cr: &I::Token| {
                         NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char())
                 }))
                 .ignored()
+                .parse_with(input)
 }
 
 #[parser(extras = E)]
@@ -374,7 +376,7 @@ pub mod unicode {
         /// // Exactly 'def' was found, with non-identifier trailing characters
         /// assert_eq!(def.parse("def(foo, bar)"), Ok("def"));
         /// // 'def' was found, but only as part of a larger identifier, so this fails to parse
-        /// assert!(def.parse("define").has_errors());
+        /// assert!(def.parse("define").is_err());
         /// ```
         #[track_caller]
         pub fn keyword<
@@ -437,7 +439,8 @@ pub mod unicode {
 /// assert_eq!(digits.parse("98345"), Ok("98345"));
 /// // A string of zeroes is still valid. Use `int` if this is not desirable.
 /// assert_eq!(digits.parse("0000"), Ok("0000"));
-/// assert!(digits.parse("").has_errors());
+/// // An empty string will fail though.
+/// assert!(digits.parse("").is_err());
 /// ```
 #[must_use]
 pub fn digits<C, I, E>(radix: u32) -> Repeated<impl Parser<I, C, E>, C>
@@ -558,14 +561,14 @@ pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I
 ///
 /// ```
 /// # use aott::prelude::*;
-/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<&str>>;
+/// let inline_whitespace = text::inline_whitespace::<_, _, extra::Err<&str>>();
 ///
 /// // Any amount of inline whitespace is parsed...
 /// assert_eq!(inline_whitespace.parse("\t  "), Ok(()));
 /// // ...including none at all!
 /// assert_eq!(inline_whitespace.parse(""), Ok(()));
 /// // ... but not newlines
-/// assert!(inline_whitespace.at_least(1).parse("\n\r").has_errors());
+/// assert!(inline_whitespace.at_least(1).parse("\n\r").is_err());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, (), ()> {

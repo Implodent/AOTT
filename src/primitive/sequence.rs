@@ -70,7 +70,12 @@ fn repeated_impl<
                 Err(Error::expected_token_found(
                         Span::new_usize(input.span_since(I::prev(input.offset))),
                         vec![],
-                        crate::MaybeDeref::Val(input.current().expect("huh")),
+                        crate::MaybeDeref::Val(input.current().ok_or_else(|| {
+                                Error::unexpected_eof(
+                                        Span::new_usize(input.span_since(I::prev(input.offset))),
+                                        None,
+                                )
+                        })?),
                 ))
         } else {
                 res
@@ -142,8 +147,8 @@ where
 /// A parser that accepts any token **except** ones contained in `things`.
 /// ```
 /// # use aott::prelude::*;
-/// let input = "abcd";
-/// assert_eq!(none_of::<&str, extra::Err<_>, _>("bcd").parse_from(&input).into_result(), Ok('a'));
+/// let parser = none_of::<&str, extra::Err<_>, _>("bcd");
+/// assert_eq!(parser.parse("abcd"), Ok('a'));
 /// ```
 pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
@@ -161,7 +166,7 @@ where
 /// # use aott::prelude::*;
 /// let input = "\"h\"";
 /// let parser = delimited(just("\""), any::<_, extra::Err<_>>, just("\""));
-/// assert_eq!(parser.parse_from(&input).into_result(), Ok('h'));
+/// assert_eq!(parser.parse(input), Ok('h'));
 /// ```
 pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         start_delimiter: impl Parser<I, O2, E>,

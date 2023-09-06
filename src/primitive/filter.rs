@@ -28,7 +28,7 @@ fn filter_impl<
                                 Span::new_usize(input.span_since(offset)),
                                 vec![],
                                 MaybeDeref::Val(
-                                        input.peek().expect("no eof error but now eof. bruh."),
+                                        input.current().expect("no eof return, but now eof"),
                                 ),
                         );
                         Err(err)

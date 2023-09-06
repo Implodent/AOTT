@@ -66,6 +66,7 @@ where
 {
         type Offset = usize;
         type Token = I::Item;
+        type OwnedMut = I;
 
         #[inline(always)]
         fn start(&self) -> Self::Offset {
@@ -156,6 +157,7 @@ where
 {
         type Offset = S::Offset;
         type Token = T;
+        type OwnedMut = I;
 
         #[inline(always)]
         fn start(&self) -> Self::Offset {

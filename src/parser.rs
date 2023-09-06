@@ -31,7 +31,7 @@ pub mod mode {
                 /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
                 fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
 
-                /// Invoke a function if [`Self::Output`] can be coerced to [`T`] (Emit mode), or just don't (Check mode).
+                /// Invoke a function if [`Self::Output`] can be coerced to `T` (Emit mode), or just don't (Check mode).
                 fn invoke_unbind<T, F: FnMut(T)>(f: F, output: Self::Output<T>);
 
                 /// Choose between two fallible functions to execute depending on the mode.
@@ -174,6 +174,14 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 self.parse_with(&mut input)
         }
 
+        /// Invokes this parser on this input.
+        /// # Errors
+        /// Returns an error if the parser failed.
+        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
+                let mut input = Input::new_with_context(&input, &context);
+                self.parse_with(&mut input)
+        }
+
         /// Runs the parser logic, producing an output, or an error.
         /// # Errors
         /// Returns an error if the parser failed.
@@ -183,8 +191,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Returns an error if the parser failed.
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E>;
 
-        /// Transform this parser to try and invoke the [`other`] parser on failure, and if that one fails, fail too.
-        /// If you are chaining a lot of [`or`](`Parser::or`) calls, please consider using [`choice`](crate::primitive::choice).
+        /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
+        /// If you are chaining a lot of [`or`](`Parser::or`) calls, please consider using [`choice`].
         fn or<P: Parser<I, O, E>>(self, other: P) -> Or<Self, P>
         where
                 Self: Sized,
@@ -202,12 +210,12 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         ///
         /// #[aott::derive::parser]
         /// fn parser(input: &str) -> (&'a str, &'a str) {
-        ///     tuple((
-        ///         (just("his"), just("her")),
+        ///     (
+        ///         choice((just("his"), just("her"))),
         ///         just("name"), just("is"),
         ///         any.repeated().slice(),
         ///         end
-        ///     )).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse_with(input)
+        ///     ).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse_with(input)
         /// }
         /// assert_eq!(parser.parse(input), Ok(("his", "juan")));
         /// ```
@@ -255,7 +263,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # use aott::prelude::*;
         /// use aott::text::Char;
         /// let parser = filter::<&str, extra::Err<&str>>(|c: &char| c.is_ident_start()).then(filter(|c: &char| c.is_ident_continue()).repeated());
-        /// assert_eq!(parser.parse_from(&"hello").into_result(), Ok(('h', "ello".chars().collect())));
+        /// assert_eq!(parser.parse("hello"), Ok(('h', "ello".chars().collect())));
         /// ```
         fn repeated(self) -> Repeated<Self, O, Vec<O>>
         where
@@ -373,6 +381,8 @@ pub trait ParserExtras<I: InputType> {
 /// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
+///
+/// [`Rc`]: `alloc::rc::Rc`
 pub struct Boxed<'b, I: InputType, O, E: ParserExtras<I>> {
         inner: RefC<DynParser<'b, I, O, E>>,
 }
