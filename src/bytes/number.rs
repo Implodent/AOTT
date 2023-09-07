@@ -13,13 +13,11 @@ macro_rules! define_number_mod {
         (~ $from_endian_name:ident $num:ident) => {
                 #[doc = concat!("Parses a nunebr of type ", stringify!($num), ".\n# Errors\nThis parser returns an error if there is not enough bytes to parse a full ", stringify!($num), ".\nThere are no other causes for errors.")]
                 pub fn $num<
-                        'parse,
-                        'a,
-                        I: $crate::input::InputType<Token = u8> + $crate::input::SliceInput<'a>,
+                        I: $crate::input::InputType<Token = u8>,
                         E: $crate::parser::ParserExtras<I>,
                 >(
-                        input: $crate::input::Input<'parse, I, E>,
-                ) -> $crate::error::IResult<'parse, I, E, $num> {
+                        input: &mut $crate::input::Input<I, E>,
+                ) -> $crate::error::PResult<I, $num, E> {
                     use $crate::parser::Parser;
                     let bytes = $crate::primitive::take_exact::<{core::mem::size_of::<$num>()}>().parse_with(input)?;
                     Ok($num::$from_endian_name(bytes))
