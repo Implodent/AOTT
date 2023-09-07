@@ -11,7 +11,7 @@ macro_rules! define_number_mod {
             }
         };
         (~ $from_endian_name:ident $num:ident) => {
-                #[doc = concat!("# Errors\nThis parser returns an error if there is not enough bytes to parse a full ", stringify!($num), ".\nThere are no other causes for errors.")]
+                #[doc = concat!("Parses a nunebr of type ", stringify!($num), ".\n# Errors\nThis parser returns an error if there is not enough bytes to parse a full ", stringify!($num), ".\nThere are no other causes for errors.")]
                 pub fn $num<
                         'parse,
                         'a,
@@ -21,8 +21,8 @@ macro_rules! define_number_mod {
                         input: $crate::input::Input<'parse, I, E>,
                 ) -> $crate::error::IResult<'parse, I, E, $num> {
                     use $crate::parser::Parser;
-                    let (input, bytes) = $crate::primitive::take_exact::<{core::mem::size_of::<$num>()}>().parse(input)?;
-                    Ok((input, $num::$from_endian_name(bytes)))
+                    let bytes = $crate::primitive::take_exact::<{core::mem::size_of::<$num>()}>().parse_with(input)?;
+                    Ok($num::$from_endian_name(bytes))
                 }
         };
 }
