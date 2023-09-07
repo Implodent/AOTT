@@ -10,6 +10,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
+// allow derive to use ::aott::PResult
+extern crate self as aott;
 
 use core::mem::MaybeUninit;
 use core::ops::Deref;

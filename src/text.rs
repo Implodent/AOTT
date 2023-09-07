@@ -405,7 +405,7 @@ pub mod unicode {
                 }
                 move |input| {
                         let befunge = input.offset;
-                        let s = ident(input)?;
+                        let s = ident::<I, C, E>(input)?;
                         let span = input.span_since(befunge);
                         (s == keyword.as_ref()).then_some(s).ok_or_else(|| {
                                 Error::expected_token_found(
