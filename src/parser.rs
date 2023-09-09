@@ -237,7 +237,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Ignored(self, EmptyPhantom::new())
         }
-        fn try_map<F: Fn(U) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
+        fn try_map<F: Fn(O) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
         where
                 Self: Sized,
         {
