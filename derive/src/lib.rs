@@ -14,7 +14,7 @@ use syn::{
         punctuated::Punctuated,
         token::Comma,
         AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, FnArg, GenericArgument,
-        GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, LitStr, Meta, MetaNameValue, Path,
+        GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, Meta, MetaNameValue, Path,
         PathArguments, PathSegment, ReturnType, Type, TypePath, TypeReference,
 };
 

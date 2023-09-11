@@ -181,3 +181,125 @@ pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
                 Ok(content)
         }
 }
+
+#[derive(Copy, Clone)]
+pub struct SeparatedBy<P, A, O, O2, V: FromIterator<O> = Vec<O>> {
+        pub(crate) parser: P,
+        pub(crate) delimiter: A,
+        pub(crate) phantom: PhantomData<(O, O2, V)>,
+        pub(crate) at_least: usize,
+        // Slightly evil: should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
+        pub(crate) at_most: u64,
+        pub(crate) allow_leading: bool,
+        pub(crate) allow_trailing: bool,
+}
+
+impl<P, A, O, O2, V: FromIterator<O>> SeparatedBy<P, A, O, O2, V> {
+        pub fn at_least(self, at_least: usize) -> Self {
+                Self { at_least, ..self }
+        }
+        pub fn at_most(self, at_most: usize) -> Self {
+                Self {
+                        at_most: at_most as u64,
+                        ..self
+                }
+        }
+        pub fn exactly(self, exactly: usize) -> Self {
+                Self {
+                        at_least: exactly,
+                        at_most: exactly as u64,
+                        ..self
+                }
+        }
+        pub fn allow_leading(mut self) -> Self {
+                self.allow_leading = true;
+                self
+        }
+        pub fn allow_trailing(mut self) -> Self {
+                self.allow_trailing = true;
+                self
+        }
+}
+
+fn separated_by_impl<
+        I: InputType,
+        O,
+        O2,
+        E: ParserExtras<I>,
+        P: Parser<I, O, E>,
+        A: Parser<I, O2, E>,
+        V: FromIterator<O>,
+        M: Mode,
+>(
+        input: &mut Input<I, E>,
+        this: &SeparatedBy<P, A, O, O2, V>,
+        _m: &M,
+) -> PResult<I, M::Output<V>, E> {
+        let mut result = vec![];
+        let mut count = 0usize;
+        if this.allow_trailing {
+                let befunge = input.save();
+                this.delimiter
+                        .check_with(input)
+                        .unwrap_or_else(|_| input.rewind(befunge));
+        }
+        let res = loop {
+                if this.at_most != !0 && count as u64 >= this.at_most {
+                        break Ok(M::bind(|| result.into_iter().collect()));
+                }
+
+                let before = input.save();
+                match M::invoke(&this.parser, input) {
+                        Ok(o) => {
+                                M::invoke_unbind(|val| result.push(val), o);
+                        }
+                        Err(e) => {
+                                if count < this.at_least {
+                                        break Err(e);
+                                }
+                                input.rewind(before);
+                                break Ok(M::bind(|| result.into_iter().collect()));
+                        }
+                }
+
+                count += 1; // what the fuck
+        };
+        if count < this.at_least {
+                Err(Error::expected_token_found(
+                        Span::new_usize(input.span_since(I::prev(input.offset))),
+                        vec![],
+                        crate::MaybeDeref::Val(input.current().ok_or_else(|| {
+                                Error::unexpected_eof(
+                                        Span::new_usize(input.span_since(I::prev(input.offset))),
+                                        None,
+                                )
+                        })?),
+                ))
+        } else {
+                if this.allow_leading {
+                        let befunge = input.save();
+                        this.delimiter
+                                .check_with(input)
+                                .unwrap_or_else(|_| input.rewind(befunge));
+                }
+                res
+        }
+}
+
+impl<
+                I: InputType,
+                O,
+                E: ParserExtras<I>,
+                P: Parser<I, O, E>,
+                O2,
+                A: Parser<I, O2, E>,
+                V: FromIterator<O>,
+        > Parser<I, V, E> for SeparatedBy<P, A, O, O2, V>
+{
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                separated_by_impl(input, self, &Check)
+        }
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, V, E> {
+                separated_by_impl(input, self, &Emit)
+        }
+}

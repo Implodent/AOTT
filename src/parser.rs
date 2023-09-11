@@ -287,6 +287,23 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                         at_most: !0,
                 }
         }
+        fn separated_by<O2, A: Parser<I, O2, E>>(
+                self,
+                delimiter: A,
+        ) -> SeparatedBy<Self, A, O, O2, Vec<O>>
+        where
+                Self: Sized,
+        {
+                SeparatedBy {
+                        allow_leading: false,
+                        allow_trailing: false,
+                        at_least: 0,
+                        at_most: !0,
+                        delimiter,
+                        parser: self,
+                        phantom: PhantomData,
+                }
+        }
         fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
         where
                 I: SliceInput<'a>,
