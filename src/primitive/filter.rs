@@ -94,7 +94,7 @@ where
 
 #[macro_export]
 macro_rules! select {
-    ($($pat:pat$(if $guard:expr)? => $res:expr)*) => {
+    ($($pat:pat$(if $guard:expr)? => $res:expr),*$(,)?) => {
         $crate::primitive::filter_map(|__token| match __token {
             $($pat$(if $guard)? => Some($res),)*
             _ => None
