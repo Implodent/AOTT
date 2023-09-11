@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::input::InputType;
 use crate::parser::ParserExtras;
 use crate::MaybeRef;
+use core::fmt::Display;
 use core::marker::PhantomData;
 use core::ops::Range;
 
@@ -20,6 +21,18 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 pub struct Simple<Item> {
         pub span: Range<usize>,
         pub reason: SimpleReason<Item>,
+}
+
+impl<Item: Debug> core::error::Error for Simple<Item> {
+        fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+                None
+        }
+}
+impl<Item: Display> Display for Simple<Item> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let Self { span, reason } = self;
+                write!(f, "{reason} (at {span})")
+        }
 }
 
 impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {

@@ -258,6 +258,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 FilterParser(self, f, PhantomData)
         }
+
         /// # Example
         /// ```
         /// # use aott::prelude::*;
@@ -287,6 +288,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                         at_most: !0,
                 }
         }
+
         fn separated_by<O2, A: Parser<I, O2, E>>(
                 self,
                 delimiter: A,
