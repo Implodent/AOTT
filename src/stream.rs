@@ -187,7 +187,7 @@ where
                 self.tokens.swap(&other);
 
                 (
-                        offset + tok.as_ref().map_or(Zero::zero(), |t| t.span().start),
+                        offset + tok.as_ref().map_or(Zero::zero(), |t| t.span().end),
                         tok.map(|t| t.into_tuple().0),
                 )
         }
