@@ -2,7 +2,6 @@ use core::{
         cell::Cell,
         fmt::Debug,
         hash::Hash,
-        marker::PhantomData,
         ops::{Range, RangeFrom},
 };
 use num_traits::{One, SaturatingSub, Zero};
