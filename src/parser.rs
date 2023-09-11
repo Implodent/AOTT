@@ -243,7 +243,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
-        fn try_map_with_span<F: Fn(U, Range<I::Offset>) -> Result<U, E::Error>, U>(
+        fn try_map_with_span<F: Fn(O, Range<I::Offset>) -> Result<U, E::Error>, U>(
                 self,
                 f: F,
         ) -> TryMapWithSpan<Self, F, O, U>
