@@ -3,6 +3,7 @@ use crate::pfn_type;
 use super::*;
 
 /// Parses a sequence of tokens `seq`.
+#[inline(always)]
 pub fn just<'a, I: InputType, T: OrderedSeq<'a, I::Token> + Clone, E: ParserExtras<I>>(
         seq: T,
 ) -> pfn_type!(I, T, E)

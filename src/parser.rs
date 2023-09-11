@@ -166,6 +166,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Invokes this parser on this input.
         /// # Errors
         /// Returns an error if the parser failed.
+        #[inline(always)]
         fn parse(&self, input: I) -> PResult<I, O, E>
         where
                 E: ParserExtras<I, Context = ()>,
@@ -177,6 +178,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Invokes this parser on this input.
         /// # Errors
         /// Returns an error if the parser failed.
+        #[inline(always)]
         fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
                 let mut input = Input::new_with_context(&input, &context);
                 self.parse_with(&mut input)

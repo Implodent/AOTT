@@ -50,6 +50,7 @@ fn map_ty(lft: Lifetime, mut ty: Type) -> Type {
 fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::Error> {
         let meta: Punctuated<Meta, Comma> = Punctuated::parse_terminated.parse2(args)?;
         let mut f = ItemFn::parse.parse2(ts)?;
+        let mut inline = true;
         let extras = meta.iter().find_map(|meth| match meth {
                 Meta::NameValue(MetaNameValue {
                         path,
@@ -57,6 +58,10 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                         ..
                 }) if path.is_ident(&Ident::new("extras", Span::call_site())) => {
                         Some(ext.to_token_stream().to_string())
+                }
+                Meta::Path(path) if path.is_ident(&Ident::new("noinline", Span::call_site())) => {
+                        inline = false;
+                        None
                 }
                 Meta::NameValue(MetaNameValue {
                         path,
@@ -143,7 +148,9 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                                 bounds: Punctuated::new(),
                         })
                 }));
+        let inl = inline.then(|| quote!(#[inline(always)]));
         Ok(quote! {
+            #inl
             #f
         })
 }

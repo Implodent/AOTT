@@ -4,7 +4,7 @@ use crate::{container::Seq, input::SliceInput, parser::Check, pfn_type};
 
 use super::*;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Repeated<P, O, V: FromIterator<O> = Vec<O>> {
         pub(crate) parser: P,
         pub(crate) phantom: PhantomData<(O, V)>,
@@ -31,6 +31,8 @@ impl<P, O, V: FromIterator<O>> Repeated<P, O, V> {
                 }
         }
 }
+
+#[inline(always)]
 fn repeated_impl<
         I: InputType,
         O,
@@ -62,6 +64,11 @@ fn repeated_impl<
                                 input.rewind(before);
                                 break Ok(M::bind(|| result.into_iter().collect()));
                         }
+                }
+
+                #[cfg(feature = "tracing")]
+                if input.offset == before.offset {
+                        tracing::error!("found Repeated parser making no progress");
                 }
 
                 count += 1; // what the fuck
@@ -98,9 +105,11 @@ pub struct Slice<'a, I, E, O, P>(P, PhantomData<&'a (I, O, E)>);
 impl<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser<I, O, E>>
         Parser<I, I::Slice, E> for Slice<'a, I, E, O, P>
 {
+        #[inline(always)]
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 self.0.check_with(input)
         }
+        #[inline(always)]
         fn parse_with<'parse>(&self, input: &mut Input<I, E>) -> PResult<I, I::Slice, E> {
                 let before = input.offset;
                 self.0.check_with(input)?;
@@ -221,6 +230,7 @@ impl<P, A, O, O2, V: FromIterator<O>> SeparatedBy<P, A, O, O2, V> {
         }
 }
 
+#[inline(always)]
 fn separated_by_impl<
         I: InputType,
         O,
