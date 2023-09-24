@@ -9,10 +9,8 @@ pub trait TakeAmount {
 }
 
 impl TakeAmount for usize {
-        #[allow(clippy::range_plus_one)]
         fn range(&self) -> Range<usize> {
-                // fuck you clippy
-                (*self)..(self + 1)
+                (*self)..(*self)
         }
 }
 impl TakeAmount for Range<usize> {
