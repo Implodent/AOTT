@@ -33,7 +33,7 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                 let mut result = vec![];
                 let mut n = 0usize;
                 loop {
-                        if range.end < n {
+                        if range.end <= n {
                                 break;
                         }
 
