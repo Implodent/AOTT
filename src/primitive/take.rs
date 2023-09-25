@@ -9,10 +9,8 @@ pub trait TakeAmount {
 }
 
 impl TakeAmount for usize {
-        #[allow(clippy::range_plus_one)]
         fn range(&self) -> Range<usize> {
-                // fuck you clippy
-                (*self)..(self + 1)
+                (*self)..(*self)
         }
 }
 impl TakeAmount for Range<usize> {
@@ -35,7 +33,7 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                 let mut result = vec![];
                 let mut n = 0usize;
                 loop {
-                        if range.end < n {
+                        if range.end <= n {
                                 break;
                         }
 
