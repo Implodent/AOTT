@@ -28,7 +28,7 @@ nightly = []
 error-recovery = []
 serialization = []
 tracing = ["dep:tracing"]
-default = ["std", "builtin-text", "error-recovery", "bytes-crate"]
+default = ["std", "builtin-text"]
 
 [badges]
 maintenance = { status = "actively-developed" }
