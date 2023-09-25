@@ -4,11 +4,10 @@ use crate::{
         error::{Error, Span},
         input::{Input, InputType},
         parser::*,
-        IResult, MaybeDeref,
+        pfn_type, MaybeDeref, PResult,
 };
 
 fn filter_impl<
-        'parse,
         I: InputType,
         O,
         E: ParserExtras<I>,
@@ -18,21 +17,21 @@ fn filter_impl<
 >(
         _mode: &M,
         this: &FilterParser<A, F, O>,
-        input: Input<'parse, I, E>,
-) -> IResult<'parse, I, E, M::Output<O>> {
+        input: &mut Input<I, E>,
+) -> PResult<I, M::Output<O>, E> {
         let offset = input.offset;
-        this.0.parse(input).and_then(|(input, thing)| {
+        this.0.parse_with(input).and_then(|thing| {
                 if this.1(&thing) {
-                        Ok((input, M::bind(|| thing)))
+                        Ok(M::bind(|| thing))
                 } else {
                         let err = Error::expected_token_found(
                                 Span::new_usize(input.span_since(offset)),
                                 vec![],
                                 MaybeDeref::Val(
-                                        input.peek().expect("no eof error but now eof. bruh."),
+                                        input.current().expect("no eof return, but now eof"),
                                 ),
                         );
-                        Err((input, err))
+                        Err(err)
                 }
         })
 }
@@ -41,74 +40,61 @@ pub struct FilterParser<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomD
 impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool> Parser<I, O, E>
         for FilterParser<A, F, O>
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 filter_impl(&Check, self, input)
         }
 
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
                 filter_impl(&Emit, self, input)
         }
 }
 
 pub fn filter<I: InputType, E: ParserExtras<I>>(
         filter: impl Fn(&I::Token) -> bool,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, I::Token> {
-        move |mut input| {
+) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E> {
+        move |input| {
                 let befunge = input.offset;
-                match input.next() {
-                        Some(el) if filter(&el) => Ok((input, el)),
-                        Some(other) => {
-                                let err = Error::expected_token_found(
-                                        Span::new_usize(input.span_since(befunge)),
-                                        vec![],
-                                        MaybeDeref::Val(other),
-                                );
-                                Err((input, err))
-                        }
-                        None => {
-                                let err = Error::unexpected_eof(
-                                        Span::new_usize(input.span_since(befunge)),
-                                        None,
-                                );
-                                Err((input, err))
-                        }
+                match input.next_or_none() {
+                        Some(el) if filter(&el) => Ok(el),
+                        Some(other) => Err(Error::expected_token_found(
+                                Span::new_usize(input.span_since(befunge)),
+                                vec![],
+                                MaybeDeref::Val(other),
+                        )),
+                        None => Err(Error::unexpected_eof(
+                                Span::new_usize(input.span_since(befunge)),
+                                None,
+                        )),
                 }
         }
 }
 
 pub fn filter_map<I: InputType, E: ParserExtras<I>, U>(
         mapper: impl Fn(I::Token) -> Option<U>,
-) -> impl Fn(Input<'_, I, E>) -> IResult<'_, I, E, U>
+) -> pfn_type!(I, U, E)
 where
         I::Token: Clone,
 {
-        move |mut input| {
+        move |input| {
                 let befunge = input.offset;
-                let Some(next) = input.next() else {
-                        let err = Error::unexpected_eof(
-                                Span::new_usize(input.span_since(befunge)),
-                                None,
-                        );
-                        return Err((input, err));
-                };
+                let next = input.next()?;
 
-                let n = next.clone();
-                if let Some(fin) = mapper(next) {
-                        Ok((input, fin))
-                } else {
-                        let err = Error::expected_token_found(
+                mapper(next).ok_or_else(|| {
+                        Error::expected_token_found(
                                 Span::new_usize(input.span_since(befunge)),
                                 vec![],
-                                MaybeDeref::Val(n),
-                        );
-                        Err((input, err))
-                }
+                                MaybeDeref::Val(
+                                        // SAFETY: the function did not bail because of eof in [`Input::next_or_eof`], because of that we can safely unwrap_unchecked.
+                                        unsafe { input.current().unwrap_unchecked() },
+                                ),
+                        )
+                })
         }
 }
 
 #[macro_export]
 macro_rules! select {
-    ($($pat:pat$(if $guard:expr)? => $res:expr)*) => {
+    ($($pat:pat$(if $guard:expr)? => $res:expr),*$(,)?) => {
         $crate::primitive::filter_map(|__token| match __token {
             $($pat$(if $guard)? => Some($res),)*
             _ => None
@@ -118,17 +104,17 @@ macro_rules! select {
 
 pub struct Rewind<A>(A);
 impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>> Parser<I, O, E> for Rewind<A> {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let befunge = input.save();
-                let (mut input, output) = self.0.check(input)?;
+                let output = self.0.check_with(input)?;
                 input.rewind(befunge);
-                Ok((input, output))
+                Ok(output)
         }
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
                 let befunge = input.save();
-                let (mut input, output) = self.0.parse(input)?;
+                let output = self.0.parse_with(input)?;
                 input.rewind(befunge);
-                Ok((input, output))
+                Ok(output)
         }
 }
 

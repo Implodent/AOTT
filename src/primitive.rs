@@ -8,7 +8,7 @@ use crate::{
         error::{Error, Span},
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
-        EmptyPhantom, IResult, MaybeRef,
+        pfn_type, EmptyPhantom, MaybeRef, PResult,
 };
 
 mod choice;
@@ -36,11 +36,8 @@ pub use tuple::*;
 /// and returns it as-is.
 /// # Errors
 /// This function returns an error if end of file is reached.
-pub fn any<I: InputType, E: ParserExtras<I>>(mut input: I) -> I::Token {
-        match input.next_or_eof() {
-                Ok(ok) => Ok((input, ok)),
-                Err(err) => Err((input, err)),
-        }
+pub fn any<I: InputType, E: ParserExtras<I>>(input: I) -> I::Token {
+        input.next()
 }
 
 #[derive(Copy, Clone)]
@@ -48,11 +45,11 @@ pub struct Ignored<A, OA>(pub(crate) A, pub(crate) EmptyPhantom<OA>);
 impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
         for Ignored<A, OA>
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.check(input)
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.check_with(input)
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.0.check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)
         }
 }
 
@@ -68,19 +65,19 @@ impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
 /// # use aott::prelude::*;
 /// let input = "eof";
 /// let parser = just("eof").then_ignore(end::<_, extra::Err<_>>);
-/// assert_eq!(parser.parse_from(&input).into_result(), Ok("eof"));
+/// assert_eq!(parser.parse(input), Ok("eof"));
 /// ```
-pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
+pub fn end<I: InputType, E: ParserExtras<I>>(input: I) {
         let offset = input.offset;
-        match input.next() {
+        match input.next_or_none() {
                 Some(found) => {
                         let err = Error::expected_eof_found(
                                 Span::new_usize(input.span_since(offset)),
                                 crate::MaybeDeref::Val(found),
                         );
-                        Err((input, err))
+                        Err(err)
                 }
-                None => Ok((input, ())),
+                None => Ok(()),
         }
 }
 
@@ -92,23 +89,53 @@ pub fn end<I: InputType, E: ParserExtras<I>>(mut input: I) {
 /// # use aott::prelude::*;
 /// let parser = maybe::<&str, extra::Err<&str>, _, _>(just("domatch"));
 /// let input = "dontmatch";
-/// assert_eq!(parser.parse_from(&input).into_result(), Ok(None));
+/// assert_eq!(parser.parse(input), Ok(None));
 /// ```
 pub fn maybe<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>>(parser: A) -> Maybe<A> {
         Maybe(parser)
+}
+
+/// A parser that skips all tokens while `filter` returns true.
+/// When it returns [`false`], the cycle stops and the function returns.
+///
+/// **Note** This parser does not allocate. It uses the [`Input::skip_while`] function, which does not allocate. You are safe to use this in `check_with` functions.
+///
+/// # Example
+/// ```ignore
+/// // snipped from text module
+/// let sw = skip_while(Char::is_whitespace);
+/// sw(input)?;
+/// let output = self.0.parse_with(input)?;
+/// sw(input)?;
+/// Ok(output)
+/// ```
+pub fn skip_while<I: InputType, E: ParserExtras<I>, F: Fn(&I::Token) -> bool>(
+        filter: F,
+) -> pfn_type!(I, (), E) {
+        move |input| {
+                input.skip_while(&filter);
+                Ok(())
+        }
 }
 
 #[derive(Copy, Clone)]
 pub struct Maybe<A>(pub(crate) A);
 
 impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O>, E> for Maybe<A> {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, Option<O>> {
-                Ok(self.0.parse(input).map_or_else(
-                        |(input, _)| (input, None),
-                        |(input, thing)| (input, Some(thing)),
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, Option<O>, E> {
+                let befunge = input.save();
+                Ok(self.0.parse_with(input).map_or_else(
+                        |_| {
+                                input.rewind(befunge);
+                                None
+                        },
+                        Some,
                 ))
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                Ok((input, ()))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                let befunge = input.save();
+                self.0.check_with(input)
+                        .unwrap_or_else(|_| input.rewind(befunge));
+                Ok(())
         }
 }

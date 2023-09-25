@@ -1,5 +1,6 @@
 use core::{marker::PhantomData, ops::Range};
 
+#[allow(deprecated)]
 use crate::{
         error::{Error, ParseResult},
         input::{Input, InputType, SliceInput},
@@ -8,12 +9,12 @@ use crate::{
         *,
 };
 
-pub(crate) use private::*;
+pub use mode::*;
 
-mod private {
+pub mod mode {
         use crate::{
                 input::{Input, InputType},
-                IResult,
+                PResult,
         };
 
         use super::{Parser, ParserExtras};
@@ -30,6 +31,7 @@ mod private {
                 /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
                 fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
 
+                /// Invoke a function if [`Self::Output`] can be coerced to `T` (Emit mode), or just don't (Check mode).
                 fn invoke_unbind<T, F: FnMut(T)>(f: F, output: Self::Output<T>);
 
                 /// Choose between two fallible functions to execute depending on the mode.
@@ -56,17 +58,10 @@ mod private {
                 /// Given an array of outputs, bind them into an output of arrays
                 fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-                /// Invoke a parser user the current mode. This is normally equivalent to
-                /// [`parser.explode::<M>(inp)`](Parser::explode), but it can be called on unsized values such as
-                /// `dyn Parser`.
-                fn invoke<'parse, I, O, E, P>(
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
                         parser: &P,
-                        inp: Input<'parse, I, E>,
-                ) -> IResult<'parse, I, E, Self::Output<O>>
-                where
-                        I: InputType,
-                        E: ParserExtras<I>,
-                        P: Parser<I, O, E> + ?Sized;
+                        input: &mut Input<I, E>,
+                ) -> PResult<I, Self::Output<O>, E>;
         }
 
         /// Emit mode - generates parser output
@@ -112,21 +107,15 @@ mod private {
                 }
 
                 #[inline(always)]
-                fn invoke<'parse, I, O, E, P>(
-                        parser: &P,
-                        inp: Input<'parse, I, E>,
-                ) -> IResult<'parse, I, E, Self::Output<O>>
-                where
-                        I: InputType,
-                        E: ParserExtras<I>,
-                        P: Parser<I, O, E> + ?Sized,
-                {
-                        parser.parse(inp)
-                }
-
-                #[inline(always)]
                 fn invoke_unbind<T, F: FnMut(T)>(mut f: F, output: Self::Output<T>) {
-                        f(output)
+                        f(output);
+                }
+                #[inline(always)]
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
+                        parser: &P,
+                        input: &mut Input<I, E>,
+                ) -> PResult<I, Self::Output<O>, E> {
+                        parser.parse_with(input)
                 }
         }
 
@@ -164,36 +153,48 @@ mod private {
                 }
                 #[inline(always)]
                 fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
-
-                #[inline(always)]
-                fn invoke<'parse, I, O, E, P>(
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
                         parser: &P,
-                        inp: Input<'parse, I, E>,
-                ) -> IResult<'parse, I, E, Self::Output<O>>
-                where
-                        I: InputType,
-                        E: ParserExtras<I>,
-                        P: Parser<I, O, E> + ?Sized,
-                {
-                        parser.check(inp)
+                        input: &mut Input<I, E>,
+                ) -> PResult<I, Self::Output<O>, E> {
+                        parser.check_with(input)
                 }
         }
 }
 
 pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
-        fn parse_from<'parse>(&self, input: &'parse I) -> ParseResult<'parse, I, O, E>
+        /// Invokes this parser on this input.
+        /// # Errors
+        /// Returns an error if the parser failed.
+        #[inline(always)]
+        fn parse(&self, input: I) -> PResult<I, O, E>
         where
                 E: ParserExtras<I, Context = ()>,
         {
-                ParseResult::single(self.parse(Input::new(input)))
+                let mut input = Input::new(&input);
+                self.parse_with(&mut input)
         }
-        /// # Errors
-        /// Returns an error if the parser failed.
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O>;
-        /// # Errors
-        /// Returns an error if the parser failed.
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()>;
 
+        /// Invokes this parser on this input.
+        /// # Errors
+        /// Returns an error if the parser failed.
+        #[inline(always)]
+        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
+                let mut input = Input::new_with_context(&input, &context);
+                self.parse_with(&mut input)
+        }
+
+        /// Runs the parser logic, producing an output, or an error.
+        /// # Errors
+        /// Returns an error if the parser failed.
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E>;
+        /// Runs the parser logic without producing output, thus significantly reducing the number of allocations.
+        /// # Errors
+        /// Returns an error if the parser failed.
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E>;
+
+        /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
+        /// If you are chaining a lot of [`or`](`Parser::or`) calls, please consider using [`choice`].
         fn or<P: Parser<I, O, E>>(self, other: P) -> Or<Self, P>
         where
                 Self: Sized,
@@ -211,16 +212,14 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         ///
         /// #[aott::derive::parser]
         /// fn parser(input: &str) -> (&'a str, &'a str) {
-        ///     tuple((
+        ///     (
         ///         choice((just("his"), just("her"))),
         ///         just("name"), just("is"),
         ///         any.repeated().slice(),
         ///         end
-        ///     )).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse(input)
+        ///     ).map(|(pronoun, _, _, name, _)| (pronoun, name)).parse_with(input)
         /// }
-        /// let (pronoun, name) = parser.parse_from(&input).into_result().unwrap();
-        /// assert_eq!(pronoun, "his");
-        /// assert_eq!(name, "juan");
+        /// assert_eq!(parser.parse(input), Ok(("his", "juan")));
         /// ```
         fn map<U, F: Fn(O) -> U>(self, mapper: F) -> Map<Self, O, F, U>
         where
@@ -240,13 +239,13 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Ignored(self, EmptyPhantom::new())
         }
-        fn try_map<F: Fn(U) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
+        fn try_map<F: Fn(O) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
         where
                 Self: Sized,
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
-        fn try_map_with_span<F: Fn(U, Range<I::Offset>) -> Result<U, E::Error>, U>(
+        fn try_map_with_span<F: Fn(O, Range<I::Offset>) -> Result<U, E::Error>, U>(
                 self,
                 f: F,
         ) -> TryMapWithSpan<Self, F, O, U>
@@ -261,12 +260,13 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 FilterParser(self, f, PhantomData)
         }
+
         /// # Example
         /// ```
         /// # use aott::prelude::*;
         /// use aott::text::Char;
         /// let parser = filter::<&str, extra::Err<&str>>(|c: &char| c.is_ident_start()).then(filter(|c: &char| c.is_ident_continue()).repeated());
-        /// assert_eq!(parser.parse_from(&"hello").into_result(), Ok(('h', "ello".chars().collect())));
+        /// assert_eq!(parser.parse("hello"), Ok(('h', "ello".chars().collect())));
         /// ```
         fn repeated(self) -> Repeated<Self, O, Vec<O>>
         where
@@ -288,6 +288,24 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                         phantom: PhantomData,
                         at_least: 0,
                         at_most: !0,
+                }
+        }
+
+        fn separated_by<O2, A: Parser<I, O2, E>>(
+                self,
+                delimiter: A,
+        ) -> SeparatedBy<Self, A, O, O2, Vec<O>>
+        where
+                Self: Sized,
+        {
+                SeparatedBy {
+                        allow_leading: false,
+                        allow_trailing: false,
+                        at_least: 0,
+                        at_most: !0,
+                        delimiter,
+                        parser: self,
+                        phantom: PhantomData,
                 }
         }
         fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
@@ -341,14 +359,14 @@ impl<
                 O,
                 E: ParserExtras<I>,
                 // only input
-                F: for<'parse> Fn(Input<'parse, I, E>) -> IResult<'parse, I, E, O>,
+                F: Fn(&mut Input<I, E>) -> PResult<I, O, E>,
         > Parser<I, O, E> for F
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
                 self(input)
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self(input).map(|(input, _)| (input, ()))
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self(input).map(|_| {})
         }
 }
 
@@ -357,14 +375,16 @@ pub trait ParserExtras<I: InputType> {
         type Context;
         // type State;
 
-        fn recover<'parse, O>(
+        #[deprecated(since = "0.3.0", note = "together with ParseResult")]
+        #[allow(deprecated)]
+        fn recover<O>(
                 _error: Self::Error,
                 _context: Self::Context,
-                input: Input<'parse, I, Self>,
+                input: Input<'_, I, Self>,
                 prev_output: Option<O>,
                 // Errors.secondary
                 prev_errors: Vec<Self::Error>,
-        ) -> ParseResult<'parse, I, O, Self>
+        ) -> ParseResult<'_, I, O, Self>
         where
                 Self: Sized,
         {
@@ -382,6 +402,8 @@ pub trait ParserExtras<I: InputType> {
 /// Due to current implementation details, the inner value is not, in fact, a [`Box`], but is an [`Rc`] to facilitate
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
+///
+/// [`Rc`]: `alloc::rc::Rc`
 pub struct Boxed<'b, I: InputType, O, E: ParserExtras<I>> {
         inner: RefC<DynParser<'b, I, O, E>>,
 }
@@ -399,11 +421,11 @@ where
         I: InputType,
         E: ParserExtras<I>,
 {
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
-                self.inner.parse(input)
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+                self.inner.parse_with(input)
         }
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.inner.check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.inner.check_with(input)
         }
 
         fn boxed<'c>(self) -> Boxed<'c, I, O, E>
@@ -439,11 +461,11 @@ where
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.deref().check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.deref().check_with(input)
         }
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
-                self.deref().parse(input)
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+                self.deref().parse_with(input)
         }
 }
 
@@ -453,10 +475,10 @@ where
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, ()> {
-                self.deref().check(input)
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.deref().check_with(input)
         }
-        fn parse<'parse>(&self, input: Input<'parse, I, E>) -> IResult<'parse, I, E, O> {
-                self.deref().parse(input)
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+                self.deref().parse_with(input)
         }
 }

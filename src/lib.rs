@@ -1,9 +1,18 @@
+#![doc = include_str!("../README_docsrs.md")]
 #![warn(clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
-#![allow(clippy::inline_always)]
-#![allow(clippy::wildcard_imports)]
+#![allow(
+        clippy::module_name_repetitions,
+        clippy::wildcard_imports,
+        clippy::inline_always,
+        rustdoc::private_intra_doc_links
+)]
+#![cfg_attr(feature = "nightly", feature(associated_type_defaults))]
+#![cfg_attr(all(feature = "nightly", not(feature = "std")), feature(error_in_core))]
 #![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate alloc;
+// allow derive to use ::aott::PResult
+extern crate self as aott;
 
 use core::mem::MaybeUninit;
 use core::ops::Deref;
@@ -19,6 +28,8 @@ pub mod primitive;
 pub mod recovery;
 pub mod stream;
 pub use aott_derive as derive;
+#[cfg(feature = "serialization")]
+pub mod ser;
 
 #[cfg(feature = "builtin-text")]
 pub mod text;
@@ -27,20 +38,55 @@ pub mod prelude {
         #[cfg(feature = "builtin-bytes")]
         pub use crate::bytes;
         pub use crate::derive::parser;
-        pub use crate::error::{Error, IResult, Span};
+        pub use crate::error::{Error, PResult, Span};
         pub use crate::extra;
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
         };
         pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;
+        #[cfg(feature = "serialization")]
+        pub use crate::ser::*;
         pub use crate::stream::Stream;
         #[cfg(feature = "builtin-text")]
         pub use crate::text;
 }
 
-pub use error::IResult;
+/// This is a macro for declaring a type that is a parser function, using `impl Fn`;
+/// It takes an $input, an $output, and an $extras type.
+///
+/// Example:
+/// ```ignore
+/// use aott::pfn_type;
+///
+/// fn myparser<I: InputType, E: ParserExtras<I>>(arg: i32) -> pfn_type!(I, (), E) {
+///     move |input| {
+///         // do some work...
+///         println!("my argument: {arg}");
+///         Ok(())
+///     }
+/// }
+/// // equivalent to:
+/// fn myparser<I: InputType, E: ParserExtras<I>>(arg: i32) ->
+///     impl Fn(&mut Input<I, E>) -> PResult<I, (), E> {
+///     /* -snip- */
+/// }
+/// ```
+#[macro_export]
+macro_rules! pfn_type {
+        ($input:ty, $output:ty, $extras:ty) => {
+                impl Fn(&mut $crate::input::Input<$input, $extras>) -> $crate::PResult<$input, $output, $extras>
+        };
+}
 
+pub use error::PResult;
+
+/// This enum allows for abstracting over references and owned values.
+/// It is implemented kind of like [`Cow`], but without the lifetime.
+/// If you want to have a [`Cow`]-esque API, you may want to use the type-alias [`MaybeRef`],
+/// which is precisely created for storing either owned value `T`, or a reference `&'a T`.
+///
+/// [`Cow`]: `alloc::borrow::Cow`
 pub enum MaybeDeref<T, R: Deref<Target = T>> {
         Ref(R),
         Val(T),

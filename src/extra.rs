@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::input::InputType;
 use crate::parser::ParserExtras;
 use crate::MaybeRef;
+use core::fmt::{Debug, Display};
 use core::marker::PhantomData;
 use core::ops::Range;
 
@@ -20,6 +21,25 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 pub struct Simple<Item> {
         pub span: Range<usize>,
         pub reason: SimpleReason<Item>,
+}
+
+#[cfg(feature = "std")]
+impl<Item: Debug + Display> std::error::Error for Simple<Item> {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                None
+        }
+}
+#[cfg(all(feature = "nightly", not(feature = "std")))]
+impl<Item: Debug> core::error::Error for Simple<Item> {
+        fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+                None
+        }
+}
+impl<Item: Debug> Display for Simple<Item> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                let Self { span, reason } = self;
+                write!(f, "{reason} (at {}..{})", span.start, span.end)
+        }
 }
 
 impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {
@@ -59,4 +79,23 @@ pub enum SimpleReason<Item> {
         ExpectedEOF { found: Item },
         UnexpectedEOF(Option<Vec<Item>>),
         ExpectedTokenFound { expected: Vec<Item>, found: Item },
+}
+
+impl<Item: Debug> Display for SimpleReason<Item> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self {
+                        Self::ExpectedEOF { found } => {
+                                write!(f, "expected end of file, found {found:?}")
+                        }
+                        Self::ExpectedTokenFound { expected, found } => {
+                                write!(f, "expected {expected:?}, found {found:?}")
+                        }
+                        Self::UnexpectedEOF(expected) => match expected {
+                                Some(expected) => {
+                                        write!(f, "unexpected end of file, expected {expected:?}")
+                                }
+                                None => write!(f, "unexpected end of file"),
+                        },
+                }
+        }
 }
