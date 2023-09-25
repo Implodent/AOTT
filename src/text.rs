@@ -143,6 +143,12 @@ pub mod ascii {
         ///
         /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
         /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
+        /// # Example
+        /// ```
+        /// # use aott::prelude::*;
+        /// # use aott::text::ascii::ident;
+        /// assert_eq!(ident::<_, _, extra::Err<_>>.parse("catch"), Ok("catch"));
+        /// ```
         #[parser(extras = E)]
         pub fn ident<'c, I: StrInput<'c, C> + 'c, C: Char, E: ParserExtras<I> + 'c>(
                 inp: I,
@@ -158,10 +164,8 @@ pub mod ascii {
                                 crate::MaybeDeref::Val(cr),
                         ));
                 }
-                filter(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')
-                        .repeated()
-                        .slice()
-                        .parse_with(inp)
+                skip_while(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')(inp)?;
+                Ok(inp.input.slice(inp.span_since(before)))
         }
 
         /// # Panics
