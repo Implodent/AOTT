@@ -1,10 +1,8 @@
 use core::{
         cell::Cell,
         fmt::Debug,
-        hash::Hash,
         ops::{Range, RangeFrom},
 };
-use num_traits::{One, SaturatingSub, Zero};
 
 use crate::input::{ExactSizeInput, InputType};
 
@@ -69,23 +67,22 @@ impl<I: Iterator> InputType for Stream<I>
 where
         I::Item: Clone + core::fmt::Debug,
 {
-        type Offset = usize;
         type Token = I::Item;
         type OwnedMut = I;
 
         #[inline(always)]
-        fn start(&self) -> Self::Offset {
+        fn start(&self) -> usize {
                 0
         }
 
         #[inline(always)]
-        fn prev(offset: Self::Offset) -> Self::Offset {
+        fn prev(offset: usize) -> usize {
                 offset - 1
         }
 
         #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
         #[inline(always)]
-        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
                 let mut other = Cell::new((Vec::new(), None));
                 self.tokens.swap(&other);
 
@@ -104,41 +101,18 @@ where
                 (offset + usize::from(tok.is_some()), tok)
         }
 }
+
 impl<I: ExactSizeIterator> ExactSizeInput for Stream<I>
 where
         I::Item: Clone + core::fmt::Debug,
 {
         #[inline(always)]
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+        unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
                 let mut other = Cell::new((Vec::new(), None));
                 self.tokens.swap(&other);
                 let len = other.get_mut().1.as_ref().expect("no iterator?!").len();
                 self.tokens.swap(&other);
 
                 range.start..len
-        }
-}
-
-pub trait Spanned<T> {
-        type Offset: Copy + Hash + Ord + Into<usize> + One + Zero + SaturatingSub;
-
-        fn span(&self) -> Range<Self::Offset>;
-        fn value(&self) -> &T;
-        fn into_tuple(self) -> (T, Range<Self::Offset>);
-}
-
-impl<T, O: Copy + Hash + Ord + Into<usize> + One + Zero + SaturatingSub> Spanned<T>
-        for (T, Range<O>)
-{
-        type Offset = O;
-
-        fn span(&self) -> Range<Self::Offset> {
-                self.1.clone()
-        }
-        fn value(&self) -> &T {
-                &self.0
-        }
-        fn into_tuple(self) -> (T, Range<Self::Offset>) {
-                self
         }
 }

@@ -1,7 +1,6 @@
 use crate::error::Error;
 use crate::input::InputType;
 use crate::parser::ParserExtras;
-use crate::MaybeRef;
 use core::fmt::{Debug, Display};
 use core::marker::PhantomData;
 use core::ops::Range;
@@ -17,85 +16,103 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
         type Context = ();
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Simple<Item> {
-        pub span: Range<usize>,
-        pub reason: SimpleReason<Item>,
-}
-
 #[cfg(feature = "std")]
-impl<Item: Debug + Display> std::error::Error for Simple<Item> {
+impl<Item: Debug + Display + 'static> std::error::Error for Simple<Item> {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
                 None
         }
 }
 #[cfg(all(feature = "nightly", not(feature = "std")))]
-impl<Item: Debug> core::error::Error for Simple<Item> {
+impl<Item: Debug + 'static> core::error::Error for Simple<Item> {
         fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
                 None
         }
 }
-impl<Item: Debug> Display for Simple<Item> {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                let Self { span, reason } = self;
-                write!(f, "{reason} (at {}..{})", span.start, span.end)
-        }
-}
 
 impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {
-        type Span = Range<usize>;
-
-        fn expected_eof_found(span: Self::Span, found: MaybeRef<'_, Item>) -> Self {
-                Self {
+        fn filter_failed(
+                span: Range<usize>,
+                location: &'static core::panic::Location<'static>,
+                token: <I as InputType>::Token,
+        ) -> Self {
+                Self::FilterFailed {
                         span,
-                        reason: SimpleReason::ExpectedEOF {
-                                found: found.into_clone(),
-                        },
+                        location,
+                        token,
                 }
+        }
+        fn expected_eof_found(span: Range<usize>, found: Item) -> Self {
+                Self::ExpectedEOF { found, span }
         }
         fn expected_token_found(
-                span: Self::Span,
-                expected: Vec<Item>,
-                found: MaybeRef<'_, Item>,
+                span: Range<usize>,
+                expected: Vec<<I as InputType>::Token>,
+                found: <I as InputType>::Token,
         ) -> Self {
-                Self {
+                Self::ExpectedTokenFound {
                         span,
-                        reason: SimpleReason::ExpectedTokenFound {
-                                expected,
-                                found: found.into_clone(),
-                        },
+                        expected,
+                        found,
                 }
         }
-        fn unexpected_eof(span: Self::Span, expected: Option<Vec<Item>>) -> Self {
-                Self {
-                        span,
-                        reason: SimpleReason::UnexpectedEOF(expected),
-                }
+        fn unexpected_eof(
+                span: Range<usize>,
+                expected: Option<Vec<<I as InputType>::Token>>,
+        ) -> Self {
+                Self::UnexpectedEOF { span, expected }
         }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SimpleReason<Item> {
-        ExpectedEOF { found: Item },
-        UnexpectedEOF(Option<Vec<Item>>),
-        ExpectedTokenFound { expected: Vec<Item>, found: Item },
+pub enum Simple<Item> {
+        ExpectedEOF {
+                found: Item,
+                span: Range<usize>,
+        },
+        UnexpectedEOF {
+                span: Range<usize>,
+                expected: Option<Vec<Item>>,
+        },
+        ExpectedTokenFound {
+                span: Range<usize>,
+                expected: Vec<Item>,
+                found: Item,
+        },
+        FilterFailed {
+                span: Range<usize>,
+                location: &'static core::panic::Location<'static>,
+                token: Item,
+        },
 }
 
-impl<Item: Debug> Display for SimpleReason<Item> {
+impl<Item: Debug> Display for Simple<Item> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 match self {
-                        Self::ExpectedEOF { found } => {
+                        Self::ExpectedEOF { found, span: _ } => {
                                 write!(f, "expected end of file, found {found:?}")
                         }
-                        Self::ExpectedTokenFound { expected, found } => {
+                        Self::ExpectedTokenFound {
+                                expected,
+                                found,
+                                span: _,
+                        } => {
                                 write!(f, "expected {expected:?}, found {found:?}")
                         }
-                        Self::UnexpectedEOF(expected) => match expected {
+                        Self::UnexpectedEOF { expected, span: _ } => match expected {
                                 Some(expected) => {
                                         write!(f, "unexpected end of file, expected {expected:?}")
                                 }
                                 None => write!(f, "unexpected end of file"),
                         },
+                        Self::FilterFailed {
+                                span,
+                                location,
+                                token,
+                        } => write!(
+                                f,
+                                "filter failed at {}..{} in {location}, with token {token:?}",
+                                span.start, span.end
+                        ),
                 }
         }
 }

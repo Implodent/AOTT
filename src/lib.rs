@@ -38,7 +38,7 @@ pub mod prelude {
         #[cfg(feature = "builtin-bytes")]
         pub use crate::bytes;
         pub use crate::derive::parser;
-        pub use crate::error::{Error, PResult, Span};
+        pub use crate::error::{Error, PResult};
         pub use crate::extra;
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,

@@ -42,11 +42,9 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                 }
                 if n < range.start {
                         let error = Error::expected_token_found(
-                                Span::new_usize(input.span_since(before)),
+                                input.span_since(before),
                                 vec![],
-                                crate::MaybeDeref::Val(unsafe {
-                                        input.input.next(before).1.expect("no token??")
-                                }),
+                                input.current().expect("no token??"),
                         );
                         Err(error)
                 } else {

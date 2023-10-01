@@ -75,14 +75,11 @@ fn repeated_impl<
         };
         if count < this.at_least {
                 Err(Error::expected_token_found(
-                        Span::new_usize(input.span_since(I::prev(input.offset))),
+                        input.span_since(I::prev(input.offset)),
                         vec![],
-                        crate::MaybeDeref::Val(input.current().ok_or_else(|| {
-                                Error::unexpected_eof(
-                                        Span::new_usize(input.span_since(I::prev(input.offset))),
-                                        None,
-                                )
-                        })?),
+                        input.current().ok_or_else(|| {
+                                Error::unexpected_eof(input.span_since(I::prev(input.offset)), None)
+                        })?,
                 ))
         } else {
                 res
@@ -276,14 +273,11 @@ fn separated_by_impl<
         };
         if count < this.at_least {
                 Err(Error::expected_token_found(
-                        Span::new_usize(input.span_since(I::prev(input.offset))),
+                        input.span_since(I::prev(input.offset)),
                         vec![],
-                        crate::MaybeDeref::Val(input.current().ok_or_else(|| {
-                                Error::unexpected_eof(
-                                        Span::new_usize(input.span_since(I::prev(input.offset))),
-                                        None,
-                                )
-                        })?),
+                        input.current().ok_or_else(|| {
+                                Error::unexpected_eof(input.span_since(I::prev(input.offset)), None)
+                        })?,
                 ))
         } else {
                 if this.allow_leading {

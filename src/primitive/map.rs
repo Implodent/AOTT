@@ -90,7 +90,7 @@ impl<
                 O,
                 E: ParserExtras<I>,
                 U,
-                F: Fn(O, Range<I::Offset>) -> Result<U, E::Error>,
+                F: Fn(O, Range<usize>) -> Result<U, E::Error>,
                 A: Parser<I, O, E>,
         > Parser<I, U, E> for TryMapWithSpan<A, F, O, U>
 {

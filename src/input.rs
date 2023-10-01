@@ -1,20 +1,14 @@
 #![allow(dead_code)]
 use crate::{
-        error::{Error, Located, Span},
+        error::{Error, Located},
         extra,
         parser::{Parser, ParserExtras},
         text::Char,
 };
-use core::{
-        hash::Hash,
-        ops::{Range, RangeFrom},
-};
-use num_traits::{One, Zero};
+use core::ops::{Range, RangeFrom};
 
 #[allow(clippy::module_name_repetitions)]
 pub trait InputType {
-        #[doc(hidden)]
-        type Offset: Copy + Hash + Ord + Into<usize> + Zero + One;
         type Token;
 
         /// The owned type containing Self that allows mutation
@@ -22,36 +16,35 @@ pub trait InputType {
         type OwnedMut;
 
         #[doc(hidden)]
-        fn start(&self) -> Self::Offset;
+        fn start(&self) -> usize;
 
         /// # Safety
         /// If `offset` is not strictly the one provided by `Self::start` or returned as the first tuple value from this function,
         /// calling `next` is undefined behavior. It may index memory outside of the desired range, it may segfault, it may panic etc. etc.
         /// Stay safe and don't use this api unless you want to explode.
         #[doc(hidden)]
-        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>);
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>);
 
         #[doc(hidden)]
-        fn prev(offset: Self::Offset) -> Self::Offset;
+        fn prev(offset: usize) -> usize;
 }
 
 impl<'a> InputType for &'a str {
         type Token = char;
-        type Offset = usize;
 
         type OwnedMut = String;
 
         #[inline]
-        fn start(&self) -> Self::Offset {
+        fn start(&self) -> usize {
                 0
         }
 
-        fn prev(offset: Self::Offset) -> Self::Offset {
+        fn prev(offset: usize) -> usize {
                 offset.saturating_sub(1)
         }
 
         #[inline(always)]
-        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
                 if offset < self.len() {
                         // SAFETY: `offset < self.len()` above guarantees offset is in-bounds
                         //         We only ever return offsets that are at a character boundary
@@ -69,11 +62,10 @@ impl<'a> InputType for &'a str {
 }
 
 impl<'a, T: Clone> InputType for &'a [T] {
-        type Offset = usize;
         type Token = T;
         type OwnedMut = Vec<T>;
 
-        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
                 if offset < self.len() {
                         // SAFETY: `offset < self.len()` above guarantees offset is in-bounds
                         //         We only ever return offsets that are at a character boundary
@@ -84,22 +76,21 @@ impl<'a, T: Clone> InputType for &'a [T] {
                 }
         }
 
-        fn start(&self) -> Self::Offset {
+        fn start(&self) -> usize {
                 0
         }
 
-        fn prev(offset: Self::Offset) -> Self::Offset {
+        fn prev(offset: usize) -> usize {
                 offset.saturating_sub(1)
         }
 }
 
 #[cfg(feature = "bytes-crate")]
 impl InputType for ::bytes::Bytes {
-        type Offset = usize;
         type Token = u8;
         type OwnedMut = ::bytes::BytesMut;
 
-        unsafe fn next(&self, offset: Self::Offset) -> (Self::Offset, Option<Self::Token>) {
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
                 if offset < self.len() {
                         // SAFETY: `offset < self.len()` above guarantees offset is in-bounds
                         //         We only ever return offsets that are at a character boundary
@@ -110,18 +101,18 @@ impl InputType for ::bytes::Bytes {
                 }
         }
 
-        fn start(&self) -> Self::Offset {
+        fn start(&self) -> usize {
                 0
         }
 
-        fn prev(offset: Self::Offset) -> Self::Offset {
+        fn prev(offset: usize) -> usize {
                 offset.saturating_sub(1)
         }
 }
 
 #[doc(hidden)]
 pub trait ExactSizeInput: InputType {
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<usize>;
+        unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize>;
 }
 
 #[doc(hidden)]
@@ -143,7 +134,7 @@ impl<T, E> Default for Errors<T, E> {
 pub struct InputOwned<I: InputType, E: ParserExtras<I> = extra::Err<I>> {
         pub(crate) input: I,
         pub(crate) cx: E::Context,
-        errors: Errors<I::Offset, E::Error>,
+        errors: Errors<usize, E::Error>,
 }
 
 impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
@@ -171,7 +162,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                         cx: &self.cx,
                 }
         }
-        pub fn as_ref_at(&mut self, offset: I::Offset) -> Input<'_, I, E> {
+        pub fn as_ref_at(&mut self, offset: usize) -> Input<'_, I, E> {
                 Input {
                         offset,
                         input: &self.input,
@@ -188,11 +179,11 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
 #[derive(Debug)]
 pub struct Input<'parse, I: InputType, E: ParserExtras<I> = extra::Err<I>> {
         #[doc(hidden)]
-        pub offset: I::Offset,
+        pub offset: usize,
         #[doc(hidden)]
         pub input: &'parse I,
         // #[doc(hidden)]
-        // pub errors: &'parse mut Errors<I::Offset, E::Error>,
+        // pub errors: &'parse mut Errors<usize, E::Error>,
         // pub(crate) state: &'parse mut E::State,
         #[doc(hidden)]
         pub cx: &'parse E::Context,
@@ -234,7 +225,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
 
         #[inline(always)]
-        pub(crate) fn next_inner(&mut self) -> (I::Offset, Option<I::Token>) {
+        pub(crate) fn next_inner(&mut self) -> (usize, Option<I::Token>) {
                 // SAFETY: offset was generated by previous call to `Input::next`
                 let (offset, token) = unsafe { self.input.next(self.offset) };
                 self.offset = offset;
@@ -252,7 +243,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         ///
         /// You can rewind back to this state later with [`Self::rewind`].
         #[inline(always)]
-        pub fn save(&self) -> Marker<I> {
+        pub fn save(&self) -> Marker {
                 Marker {
                         offset: self.offset,
                         err_count: 0, //self.errors.secondary.len(),
@@ -264,7 +255,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         /// You can create a marker with which to perform rewinding using [`Self::save`].
         /// Using a marker from another input is UB. Your parser may explode. You may get a panic.
         #[inline(always)]
-        pub fn rewind(&mut self, marker: Marker<I>) {
+        pub fn rewind(&mut self, marker: Marker) {
                 // self.errors.secondary.truncate(marker.err_count);
                 self.offset = marker.offset;
         }
@@ -281,15 +272,14 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 unsafe { self.input.next(self.offset).1 }
         }
         #[inline(always)]
-        pub fn span_since(&self, before: I::Offset) -> Range<I::Offset> {
+        pub fn span_since(&self, before: usize) -> Range<usize> {
                 before..self.offset
         }
         #[inline(always)]
         pub fn next(&mut self) -> Result<I::Token, E::Error> {
                 let befunge = self.offset;
-                self.next_or_none().ok_or_else(|| {
-                        Error::unexpected_eof(Span::new_usize(self.span_since(befunge)), None)
-                })
+                self.next_or_none()
+                        .ok_or_else(|| Error::unexpected_eof(self.span_since(befunge), None))
         }
         pub fn skip(&mut self) -> Result<(), E::Error> {
                 let befunge = self.offset;
@@ -298,10 +288,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                                 self.offset = offset;
                                 Ok(())
                         }
-                        (_, None) => Err(Error::unexpected_eof(
-                                Span::new_usize(self.span_since(befunge)),
-                                None,
-                        )),
+                        (_, None) => Err(Error::unexpected_eof(self.span_since(befunge), None)),
                 }
         }
         #[inline(always)]
@@ -310,7 +297,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
 
         #[inline(always)]
-        pub fn slice(&self, range: Range<I::Offset>) -> I::Slice
+        pub fn slice(&self, range: Range<usize>) -> I::Slice
         where
                 I: SliceInput<'parse>,
         {
@@ -326,7 +313,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
 
         #[inline(always)]
-        pub fn slice_since(&self, before: I::Offset) -> I::Slice
+        pub fn slice_since(&self, before: usize) -> I::Slice
         where
                 I: SliceInput<'parse>,
         {
@@ -334,17 +321,11 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         }
 }
 
-#[derive(Debug)]
-pub struct Marker<I: InputType> {
-        pub offset: I::Offset,
+#[derive(Debug, Clone, Copy)]
+pub struct Marker {
+        pub offset: usize,
         err_count: usize,
 }
-impl<I: InputType> Clone for Marker<I> {
-        fn clone(&self) -> Self {
-                *self
-        }
-}
-impl<I: InputType> Copy for Marker<I> {}
 
 /// Implemented by inputs that represent slice-like streams of input tokens.
 pub trait SliceInput<'a>: ExactSizeInput {
@@ -358,33 +339,30 @@ pub trait SliceInput<'a>: ExactSizeInput {
         /// Get a slice from a start and end offset
         // TODO: Make unsafe
         #[doc(hidden)]
-        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice;
+        fn slice(&self, range: Range<usize>) -> Self::Slice;
 
         /// Get a slice from a start offset till the end of the input
         // TODO: Make unsafe
         #[doc(hidden)]
-        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice;
+        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice;
 }
 
-pub trait StrInput<'a, C: Char>:
-        InputType<Offset = usize, Token = C> + SliceInput<'a, Slice = &'a C::Str>
-{
-}
+pub trait StrInput<'a, C: Char>: InputType<Token = C> + SliceInput<'a, Slice = &'a C::Str> {}
 impl<'a> ExactSizeInput for &'a str {
         #[inline(always)]
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+        unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
                 range.start..self.len()
         }
 }
 impl<'a, T: Clone> ExactSizeInput for &'a [T] {
         #[inline(always)]
-        unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+        unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
                 range.start..self.len()
         }
 }
 // impl<'a, T: Clone + 'a, const N: usize> ExactSizeInput for &'a [T; N] {
 //         #[inline(always)]
-//         unsafe fn span_from(&self, range: RangeFrom<Self::Offset>) -> Range<Self::Offset> {
+//         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
 //                 (range.start..N).into()
 //         }
 // }
@@ -399,12 +377,12 @@ impl<'a> SliceInput<'a> for &'a str {
         }
 
         #[inline(always)]
-        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        fn slice(&self, range: Range<usize>) -> Self::Slice {
                 &self[range]
         }
 
         #[inline(always)]
-        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice {
                 &self[from]
         }
 }
@@ -420,12 +398,12 @@ impl<'a, T: Clone> SliceInput<'a> for &'a [T] {
         }
 
         #[inline(always)]
-        fn slice(&self, range: Range<Self::Offset>) -> Self::Slice {
+        fn slice(&self, range: Range<usize>) -> Self::Slice {
                 &self[range]
         }
 
         #[inline(always)]
-        fn slice_from(&self, from: RangeFrom<Self::Offset>) -> Self::Slice {
+        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice {
                 &self[from]
         }
 }

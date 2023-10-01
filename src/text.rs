@@ -1,9 +1,9 @@
-use core::{borrow::Borrow, marker::PhantomData};
+use core::{borrow::Borrow, marker::PhantomData, ops::Range};
 
 use crate::{
         container::OrderedSeq,
         derive::parser,
-        error::{Error, Span},
+        error::Error,
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
         pfn_type,
@@ -16,10 +16,20 @@ mod private {
         pub trait Sealed {}
 }
 
+pub trait CharError<C: Char>: for<'a> crate::error::Error<&'a C::Str> {
+        fn expected_ident_char(span: Range<usize>, got: C) -> Self;
+        fn expected_keyword<'a, 'b: 'a>(
+                span: Range<usize>,
+                keyword: &'b C::Str,
+                actual: &'a C::Str,
+        ) -> Self;
+        fn expected_digit(span: Range<usize>, radix: u32, got: C) -> Self;
+}
+
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
-/// implement this trait, please [open an issue/PR](https://github.com/zesterer/chumsky/issues/new).
+/// implement this trait, please [open an issue/PR](https://github.com/Implodent/AOTT/issues/new).
 pub trait Char: Sized + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
         /// The default unsized [`str`]-like type of a linear sequence of this character.
         ///
@@ -132,8 +142,6 @@ impl Char for u8 {
 }
 
 pub mod ascii {
-        use PResult;
-
         use super::*;
 
         /// A parser that accepts a C-style identifier.
@@ -152,17 +160,16 @@ pub mod ascii {
         #[parser(extras = E)]
         pub fn ident<'c, I: StrInput<'c, C> + 'c, C: Char, E: ParserExtras<I> + 'c>(
                 inp: I,
-        ) -> &'c C::Str {
+        ) -> &'c C::Str
+        where
+                E::Error: CharError<C>,
+        {
                 let before = inp.offset;
                 let cr = inp.next()?;
                 let chr = cr.to_char();
                 let span = inp.span_since(before);
                 if !(chr.is_ascii_alphabetic() || chr == '_') {
-                        return Err(Error::expected_token_found(
-                                Span::new_usize(span),
-                                vec![],
-                                crate::MaybeDeref::Val(cr),
-                        ));
+                        return Err(CharError::expected_ident_char(span, cr));
                 }
                 skip_while(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')(inp)?;
                 Ok(inp.input.slice(inp.span_since(before)))
@@ -173,15 +180,16 @@ pub mod ascii {
         #[track_caller]
         pub fn keyword<
                 'a,
+                'b: 'a,
                 C: Char + core::fmt::Debug + 'a,
                 I: InputType + StrInput<'a, C> + 'a,
                 E: ParserExtras<I> + 'a,
-                Str: AsRef<C::Str> + 'a + Clone,
         >(
-                keyword: Str,
+                keyword: &'b C::Str,
         ) -> impl Fn(&mut Input<I, E>) -> PResult<I, &'a C::Str, E>
         where
                 C::Str: PartialEq,
+                E::Error: CharError<C>,
         {
                 #[cfg(debug_assertions)]
                 {
@@ -200,13 +208,7 @@ pub mod ascii {
                         let ident = ident(input)?;
                         if ident != keyword.as_ref() {
                                 let span = input.span_since(before);
-                                return Err(Error::expected_token_found(
-                                        Span::new_usize(span),
-                                        vec![],
-                                        crate::MaybeDeref::Val(unsafe {
-                                                input.input.next(before).1.unwrap_unchecked()
-                                        }),
-                                ));
+                                return Err(CharError::expected_keyword(span, keyword, ident));
                         }
                         Ok(input.input.slice(input.span_since(before)))
                 }
@@ -317,9 +319,9 @@ pub fn just_ignore_case<
                                         None
                                 }
                                 (_, found) => Some(Error::expected_token_found_or_eof(
-                                        Span::new_usize(input.span_since(befunge)),
+                                        input.span_since(befunge),
                                         vec![next.into_clone()],
-                                        found.map(crate::MaybeDeref::Val),
+                                        found,
                                 )),
                         }
                 }) {
@@ -329,6 +331,7 @@ pub fn just_ignore_case<
                 }
         }
 }
+
 // Unicode is the default
 pub use unicode::*;
 
@@ -357,9 +360,15 @@ pub mod unicode {
         #[parser(extras = E)]
         pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
                 input: I,
-        ) -> &'a C::Str {
+        ) -> &'a C::Str
+        where
+                E::Error: CharError<C>,
+        {
                 let before = input.offset;
-                filter(|c: &C| c.is_ident_start()).check_with(input)?;
+                let c = input.next()?;
+                if !c.is_ident_start() {
+                        return Err(CharError::expected_ident_char(input.span_since(before), c));
+                }
                 skip_while(|c: &C| c.is_ident_continue())(input)?;
                 Ok(input.input.slice(input.span_since(before)))
         }
@@ -385,15 +394,16 @@ pub mod unicode {
         #[track_caller]
         pub fn keyword<
                 'a,
+                'b: 'a,
                 I: InputType + StrInput<'a, C> + 'a,
                 C: Char,
-                Str: AsRef<C::Str> + Clone,
                 E: ParserExtras<I> + 'a,
         >(
-                keyword: Str,
+                keyword: &'b C::Str,
         ) -> pfn_type!(I, &'a C::Str, E)
         where
                 C::Str: PartialEq + Display,
+                E::Error: CharError<C>,
         {
                 #[cfg(debug_assertions)]
                 {
@@ -411,15 +421,9 @@ pub mod unicode {
                         let befunge = input.offset;
                         let s = ident::<I, C, E>(input)?;
                         let span = input.span_since(befunge);
-                        (s == keyword.as_ref()).then_some(s).ok_or_else(|| {
-                                Error::expected_token_found(
-                                        Span::new_usize(span.clone()),
-                                        vec![],
-                                        crate::MaybeDeref::Val(
-                                                C::str_to_chars(s).next().expect("no keyword??"),
-                                        ),
-                                )
-                        })
+                        (s == keyword.as_ref())
+                                .then_some(s)
+                                .ok_or_else(|| CharError::expected_keyword(span, keyword, s))
                 }
         }
 }
@@ -469,18 +473,20 @@ where
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
         radix: u32,
-) -> pfn_type!(I, &'a C::Str, E) {
+) -> pfn_type!(I, &'a C::Str, E)
+where
+        E::Error: CharError<C>,
+{
         move |input| {
                 with_slice(input, move |input| {
                         let cr = input.next()?;
                         let befunge = input.offset;
                         if !(cr.is_digit(radix) && cr != C::digit_zero()) {
-                                let err = Error::expected_token_found(
-                                        Span::new_usize(input.span_since(befunge)),
-                                        vec![],
-                                        crate::MaybeDeref::Val(cr),
-                                );
-                                return Err(err);
+                                return Err(CharError::expected_digit(
+                                        input.span_since(befunge),
+                                        radix,
+                                        cr,
+                                ));
                         }
                         // hehe
                         any.filter(move |cr: &C| cr.is_digit(radix))
@@ -533,6 +539,7 @@ impl<
                 Ok(())
         }
 }
+
 /// A parser that accepts (and ignores) any number of whitespace characters.
 ///
 /// The output type of this parser is `()`.

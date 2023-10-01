@@ -2,7 +2,7 @@ use core::{marker::PhantomData, ops::Range};
 
 #[allow(deprecated)]
 use crate::{
-        error::{Error, ParseResult},
+        error::Error,
         input::{Input, InputType, SliceInput},
         primitive::*,
         sync::RefC,
@@ -245,7 +245,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
-        fn try_map_with_span<F: Fn(O, Range<I::Offset>) -> Result<U, E::Error>, U>(
+        fn try_map_with_span<F: Fn(O, Range<usize>) -> Result<U, E::Error>, U>(
                 self,
                 f: F,
         ) -> TryMapWithSpan<Self, F, O, U>
@@ -374,27 +374,6 @@ pub trait ParserExtras<I: InputType> {
         type Error: Error<I>;
         type Context;
         // type State;
-
-        #[deprecated(since = "0.3.0", note = "together with ParseResult")]
-        #[allow(deprecated)]
-        fn recover<O>(
-                _error: Self::Error,
-                _context: Self::Context,
-                input: Input<'_, I, Self>,
-                prev_output: Option<O>,
-                // Errors.secondary
-                prev_errors: Vec<Self::Error>,
-        ) -> ParseResult<'_, I, O, Self>
-        where
-                Self: Sized,
-        {
-                // default: noop
-                ParseResult {
-                        input,
-                        output: prev_output,
-                        errors: prev_errors,
-                }
-        }
 }
 
 /// See [`Parser::boxed`].

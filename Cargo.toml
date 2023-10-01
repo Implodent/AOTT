@@ -13,7 +13,6 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 hashbrown = "0.14.0"
 aott_derive = { path = "./derive", version = "0.3.0" }
-num-traits = "0.2.16"
 unicode-ident = { version = "1.0.11", optional = true }
 bytes = { version = "1.4.0", optional = true }
 derive_more = "0.99.17"

@@ -1,12 +1,13 @@
 use core::marker::PhantomData;
 
 use crate::{
-        error::{Error, Span},
+        error::Error,
         input::{Input, InputType},
         parser::*,
-        pfn_type, MaybeDeref, PResult,
+        pfn_type, PResult,
 };
 
+#[track_caller]
 fn filter_impl<
         I: InputType,
         O,
@@ -24,12 +25,10 @@ fn filter_impl<
                 if this.1(&thing) {
                         Ok(M::bind(|| thing))
                 } else {
-                        let err = Error::expected_token_found(
-                                Span::new_usize(input.span_since(offset)),
-                                vec![],
-                                MaybeDeref::Val(
-                                        input.current().expect("no eof return, but now eof"),
-                                ),
+                        let err = Error::filter_failed(
+                                input.span_since(offset),
+                                core::panic::Location::caller(),
+                                input.current().expect("what"),
                         );
                         Err(err)
                 }
@@ -49,6 +48,7 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool>
         }
 }
 
+#[track_caller]
 pub fn filter<I: InputType, E: ParserExtras<I>>(
         filter: impl Fn(&I::Token) -> bool,
 ) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E> {
@@ -56,19 +56,17 @@ pub fn filter<I: InputType, E: ParserExtras<I>>(
                 let befunge = input.offset;
                 match input.next_or_none() {
                         Some(el) if filter(&el) => Ok(el),
-                        Some(other) => Err(Error::expected_token_found(
-                                Span::new_usize(input.span_since(befunge)),
-                                vec![],
-                                MaybeDeref::Val(other),
+                        Some(other) => Err(Error::filter_failed(
+                                input.span_since(befunge),
+                                core::panic::Location::caller(),
+                                other,
                         )),
-                        None => Err(Error::unexpected_eof(
-                                Span::new_usize(input.span_since(befunge)),
-                                None,
-                        )),
+                        None => Err(Error::unexpected_eof(input.span_since(befunge), None)),
                 }
         }
 }
 
+#[track_caller]
 pub fn filter_map<I: InputType, E: ParserExtras<I>, U>(
         mapper: impl Fn(I::Token) -> Option<U>,
 ) -> pfn_type!(I, U, E)
@@ -80,13 +78,10 @@ where
                 let next = input.next()?;
 
                 mapper(next).ok_or_else(|| {
-                        Error::expected_token_found(
-                                Span::new_usize(input.span_since(befunge)),
-                                vec![],
-                                MaybeDeref::Val(
-                                        // SAFETY: the function did not bail because of eof in [`Input::next_or_eof`], because of that we can safely unwrap_unchecked.
-                                        unsafe { input.current().unwrap_unchecked() },
-                                ),
+                        Error::filter_failed(
+                                input.span_since(befunge),
+                                core::panic::Location::caller(),
+                                input.current().expect("eof"),
                         )
                 })
         }

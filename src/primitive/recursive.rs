@@ -66,3 +66,11 @@ impl<'a, I: InputType, O, E: ParserExtras<I>> Parser<I, O, E> for Recursive<'a, 
                         .parse_with(input)
         }
 }
+
+pub fn recursive<'a, I: InputType + 'a, O: 'a, E: ParserExtras<I> + 'a, P: Parser<I, O, E> + 'a>(
+        def: impl Fn(Recursive<'a, I, O, E>) -> P + 'a,
+) -> impl Parser<I, O, E> + 'a {
+        let mut rec = Recursive::declare();
+        rec.define(def(rec.clone()));
+        rec
+}
