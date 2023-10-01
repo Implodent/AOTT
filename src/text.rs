@@ -382,7 +382,7 @@ pub mod unicode {
         ///
         /// ```
         /// # use aott::prelude::*;
-        /// let def = text::unicode::keyword::<_, _, _, extra::Err<&str>>("def");
+        /// let def = text::unicode::keyword::<_, _, extra::Err<&str>>("def");
         ///
         /// // Exactly 'def' was found
         /// assert_eq!(def.parse("def"), Ok("def"));

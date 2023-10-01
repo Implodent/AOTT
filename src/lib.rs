@@ -122,6 +122,7 @@ impl<T: Clone, R: Deref<Target = T>> MaybeDeref<T, R> {
                 }
         }
 }
+
 /// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
 /// with `PhantomData`.
 struct EmptyPhantom<T>(core::marker::PhantomData<T>);
@@ -145,6 +146,7 @@ unsafe impl<T> Sync for EmptyPhantom<T> {}
 impl<T> Unpin for EmptyPhantom<T> {}
 impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
 impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
+
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 pub(crate) trait MaybeUninitExt<T>: Sized {
         /// Identical to the unstable [`MaybeUninit::uninit_array`]

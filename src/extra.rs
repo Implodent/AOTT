@@ -83,6 +83,44 @@ pub enum Simple<Item> {
                 location: &'static core::panic::Location<'static>,
                 token: Item,
         },
+        #[cfg(feature = "builtin-text")]
+        ExpectedKeyword {
+                span: Range<usize>,
+                keyword: String,
+                found: String,
+        },
+        #[cfg(feature = "builtin-text")]
+        ExpectedDigit {
+                span: Range<usize>,
+                radix: u32,
+                found: char,
+        },
+        #[cfg(feature = "builtin-text")]
+        ExpectedIdent {
+                span: Range<usize>,
+                found: char,
+        },
+}
+
+#[cfg(feature = "builtin-text")]
+impl crate::text::CharError<char> for Simple<char> {
+        fn expected_digit(span: Range<usize>, radix: u32, found: char) -> Self {
+                Self::ExpectedDigit { span, radix, found }
+        }
+        fn expected_ident_char(span: Range<usize>, found: char) -> Self {
+                Self::ExpectedIdent { span, found }
+        }
+        fn expected_keyword<'a, 'b: 'a>(
+                span: Range<usize>,
+                keyword: &'b str,
+                actual: &'a str,
+        ) -> Self {
+                Self::ExpectedKeyword {
+                        span,
+                        keyword: keyword.to_string(),
+                        found: actual.to_string(),
+                }
+        }
 }
 
 impl<Item: Debug> Display for Simple<Item> {
@@ -113,6 +151,24 @@ impl<Item: Debug> Display for Simple<Item> {
                                 "filter failed at {}..{} in {location}, with token {token:?}",
                                 span.start, span.end
                         ),
+                        #[cfg(feature = "builtin-text")]
+                        Self::ExpectedDigit {
+                                span: _,
+                                radix,
+                                found,
+                        } => write!(f, "expected digit (radix {radix}), but found {found}"),
+                        #[cfg(feature = "builtin-text")]
+                        Self::ExpectedIdent { span, found } => write!(
+                                f,
+                                "expected identifier character at {}..{}, but found {found}",
+                                span.start, span.end
+                        ),
+                        #[cfg(feature = "builtin-text")]
+                        Self::ExpectedKeyword {
+                                span: _,
+                                keyword,
+                                found,
+                        } => write!(f, "expected keyword {keyword}, but found {found}"),
                 }
         }
 }
