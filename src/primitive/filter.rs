@@ -52,13 +52,14 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool>
 pub fn filter<I: InputType, E: ParserExtras<I>>(
         filter: impl Fn(&I::Token) -> bool,
 ) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E> {
+        let caller = core::panic::Location::caller();
         move |input| {
                 let befunge = input.offset;
                 match input.next_or_none() {
                         Some(el) if filter(&el) => Ok(el),
                         Some(other) => Err(Error::filter_failed(
                                 input.span_since(befunge),
-                                core::panic::Location::caller(),
+                                caller,
                                 other,
                         )),
                         None => Err(Error::unexpected_eof(input.span_since(befunge), None)),
