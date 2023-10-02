@@ -167,6 +167,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # Errors
         /// Returns an error if the parser failed.
         #[inline(always)]
+        #[track_caller]
         fn parse(&self, input: I) -> PResult<I, O, E>
         where
                 E: ParserExtras<I, Context = ()>,
@@ -179,6 +180,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # Errors
         /// Returns an error if the parser failed.
         #[inline(always)]
+        #[track_caller]
         fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
                 let mut input = Input::new_with_context(&input, &context);
                 self.parse_with(&mut input)
@@ -187,10 +189,12 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Runs the parser logic, producing an output, or an error.
         /// # Errors
         /// Returns an error if the parser failed.
+        #[track_caller]
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E>;
         /// Runs the parser logic without producing output, thus significantly reducing the number of allocations.
         /// # Errors
         /// Returns an error if the parser failed.
+        #[track_caller]
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E>;
 
         /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
