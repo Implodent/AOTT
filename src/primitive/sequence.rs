@@ -33,6 +33,7 @@ impl<P, O, V: FromIterator<O>> Repeated<P, O, V> {
 }
 
 #[inline(always)]
+#[track_caller]
 fn repeated_impl<
         I: InputType,
         O,
@@ -120,6 +121,7 @@ pub fn slice<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser
         Slice(parser, PhantomData)
 }
 
+#[track_caller]
 pub fn with_slice<
         'parse,
         'a,
@@ -141,6 +143,7 @@ pub fn with_slice<
 /// For example, you could pass a `&str` as `things`, and it would result in a parser,
 /// that would match any character that `things` contains.
 /// That works the same with an array, and really, anything that implements `Seq<I::Token>`.
+#[track_caller]
 pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
 ) -> pfn_type!(I, I::Token, E)
@@ -174,6 +177,7 @@ where
 /// let parser = delimited(just("\""), any::<_, extra::Err<_>>, just("\""));
 /// assert_eq!(parser.parse(input), Ok('h'));
 /// ```
+#[track_caller]
 pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         start_delimiter: impl Parser<I, O2, E>,
         content_parser: impl Parser<I, O, E>,
