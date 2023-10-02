@@ -6,7 +6,10 @@
         clippy::inline_always,
         rustdoc::private_intra_doc_links
 )]
-#![cfg_attr(feature = "nightly", feature(associated_type_defaults))]
+#![cfg_attr(
+        feature = "nightly",
+        feature(associated_type_defaults, closure_track_caller)
+)]
 #![cfg_attr(all(feature = "nightly", not(feature = "std")), feature(error_in_core))]
 #![cfg_attr(not(feature = "std"), no_std)]
 

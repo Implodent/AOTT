@@ -52,14 +52,14 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool>
 pub fn filter<I: InputType, E: ParserExtras<I>>(
         filter: impl Fn(&I::Token) -> bool,
 ) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E> {
-        let caller = core::panic::Location::caller();
+        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
                 let befunge = input.offset;
                 match input.next_or_none() {
                         Some(el) if filter(&el) => Ok(el),
                         Some(other) => Err(Error::filter_failed(
                                 input.span_since(befunge),
-                                caller,
+                                core::panic::Location::caller(),
                                 other,
                         )),
                         None => Err(Error::unexpected_eof(input.span_since(befunge), None)),
@@ -74,6 +74,7 @@ pub fn filter_map<I: InputType, E: ParserExtras<I>, U>(
 where
         I::Token: Clone,
 {
+        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
                 let befunge = input.offset;
                 let next = input.next()?;

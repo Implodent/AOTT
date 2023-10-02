@@ -150,6 +150,7 @@ pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
 where
         I::Token: PartialEq,
 {
+        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| filter(|thing| things.contains(thing)).parse_with(input)
 }
 
@@ -165,6 +166,7 @@ pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
 where
         I::Token: PartialEq,
 {
+        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| filter(|thing| !things.contains(thing)).parse_with(input)
 }
 
@@ -183,6 +185,7 @@ pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         content_parser: impl Parser<I, O, E>,
         end_delimiter: impl Parser<I, O1, E>,
 ) -> pfn_type!(I, O, E) {
+        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
                 start_delimiter.check_with(input)?;
                 let content = content_parser.parse_with(input)?;
@@ -232,6 +235,7 @@ impl<P, A, O, O2, V: FromIterator<O>> SeparatedBy<P, A, O, O2, V> {
 }
 
 #[inline(always)]
+#[track_caller]
 fn separated_by_impl<
         I: InputType,
         O,
