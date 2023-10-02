@@ -366,9 +366,11 @@ impl<
                 F: Fn(&mut Input<I, E>) -> PResult<I, O, E>,
         > Parser<I, O, E> for F
 {
+        #[track_caller]
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
                 self(input)
         }
+        #[track_caller]
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 self(input).map(|_| {})
         }
