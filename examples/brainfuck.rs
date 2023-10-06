@@ -1,3 +1,4 @@
+#![feature(test)]
 use aott::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -79,4 +80,9 @@ fn main() {
                 }
                 Err(err) => println!("Parsing error: {err:?}"),
         }
+}
+
+#[cfg(test)]
+mod tests {
+        use test::bench;
 }
