@@ -192,7 +192,7 @@ fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
                                                                 .parse_args::<LitStr>().unwrap();
                                                         return quote!(Self::#ident => String::from(#real))
                                                 } else {
-                                                        panic!("no token attr on unit variant")
+                                                        panic!("no token attr on unit variant {ident}")
                                                 }
                                         }
                                         _ => panic!("unsupported unit variant or whatever"),
