@@ -185,11 +185,12 @@ fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
                                         }
                                         Fields::Unit => {
                                                 if let Some(token_attr) = attrs.iter().find(|x| {
-                                                        x.path().get_ident().unwrap().to_string()
-                                                                == "token"
+                                                        let wtf = x.path().get_ident().unwrap().to_string();
+                                                        matches!(wtf.as_str(), "token" | "regex")
                                                 }) {
-                                                        let real = token_attr
-                                                                .parse_args::<LitStr>().unwrap();
+                                                        let real = LitStr::new(&token_attr
+                                                                .parse_args::<LitStr>().unwrap().value(), Span::call_site());
+
                                                         return quote!(Self::#ident => String::from(#real))
                                                 } else {
                                                         panic!("no token attr on unit variant {ident}")
