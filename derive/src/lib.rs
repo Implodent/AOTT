@@ -181,6 +181,9 @@ fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
                                          ..
                                  }| match fields {
                                         Fields::Unnamed(FieldsUnnamed { unnamed, .. }) => {
+                                                quote!(Self::#ident(bruh) => bruh)
+                                        }
+                                        Fields::Unit => {
                                                 if let Some(token_attr) = attrs.iter().find(|x| {
                                                         x.path().get_ident().unwrap().to_string()
                                                                 == "token"
@@ -188,8 +191,9 @@ fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
                                                         let real = token_attr
                                                                 .parse_args::<LitStr>().unwrap();
                                                         return quote!(Self::#ident => String::from(#real))
+                                                } else {
+                                                        panic!("no token attr on unit variant")
                                                 }
-                                                quote!(Self::#ident(bruh) => bruh)
                                         }
                                         _ => panic!("unsupported unit variant or whatever"),
                                 },
