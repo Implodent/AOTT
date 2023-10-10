@@ -272,33 +272,19 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// let parser = filter::<&str, extra::Err<&str>>(|c: &char| c.is_ident_start()).then(filter(|c: &char| c.is_ident_continue()).repeated());
         /// assert_eq!(parser.parse("hello"), Ok(('h', "ello".chars().collect())));
         /// ```
-        fn repeated(self) -> Repeated<Self, O, Vec<O>>
+        fn repeated(self) -> Repeated<Self, O>
         where
                 Self: Sized,
         {
                 Repeated {
                         parser: self,
-                        phantom: PhantomData,
                         at_least: 0,
                         at_most: !0,
-                }
-        }
-        fn repeated_custom<V: FromIterator<O>>(self) -> Repeated<Self, O, V>
-        where
-                Self: Sized,
-        {
-                Repeated {
-                        parser: self,
                         phantom: PhantomData,
-                        at_least: 0,
-                        at_most: !0,
                 }
         }
 
-        fn separated_by<O2, A: Parser<I, O2, E>>(
-                self,
-                delimiter: A,
-        ) -> SeparatedBy<Self, A, O, O2, Vec<O>>
+        fn separated_by<OD, D: Parser<I, OD, E>>(self, delimiter: D) -> SeparatedBy<Self, D, O, OD>
         where
                 Self: Sized,
         {

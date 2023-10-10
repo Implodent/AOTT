@@ -457,7 +457,7 @@ where
         I: InputType<Token = C>,
         E: ParserExtras<I>,
 {
-        any.filter(move |c: &C| c.is_digit(radix))
+        filter(move |c: &C| c.is_digit(radix))
                 .repeated()
                 .at_least(1)
 }
@@ -556,14 +556,15 @@ impl<
 /// assert_eq!(whitespace.parse(""), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
-) -> Repeated<impl Parser<I, (), E>, (), ()> {
+) -> Repeated<impl Parser<I, (), E>, ()> {
         filter(|c: &I::Token| c.is_whitespace())
                 .ignored()
-                .repeated_custom()
+                .repeated()
 }
+
 /// A parser that accepts (and ignores) any number of inline whitespace characters.
 ///
-/// This parser is a `Parser::Repeated` and so methods such as `at_least()` can be called on it.
+/// This parser is a `Repeated` and so methods such as `at_least()` can be called on it.
 ///
 /// The output type of this parser is `()`.
 ///
@@ -581,8 +582,8 @@ pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").is_err());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
-) -> Repeated<impl Parser<I, (), E>, (), ()> {
+) -> Repeated<impl Parser<I, (), E>, ()> {
         filter(|c: &I::Token| c.is_inline_whitespace())
                 .ignored()
-                .repeated_custom()
+                .repeated()
 }

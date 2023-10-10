@@ -26,6 +26,7 @@ fn bf_file(input: &str) -> Vec<Instruction> {
         ))
         // Brainfuck is sequential, so we parse as many instructions as is possible
         .repeated()
+        .collect::<Vec<_>>()
         .parse_with(input)
 }
 

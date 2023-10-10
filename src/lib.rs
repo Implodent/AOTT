@@ -25,6 +25,7 @@ pub mod container;
 pub mod error;
 pub mod extra;
 pub mod input;
+pub mod iter;
 pub mod parser;
 pub mod primitive;
 #[cfg(feature = "error-recovery")]
@@ -46,6 +47,7 @@ pub mod prelude {
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
         };
+        pub use crate::iter::*;
         pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;
         #[cfg(feature = "serialization")]

@@ -13,9 +13,10 @@ use syn::{
         parse::{Parse, Parser},
         punctuated::Punctuated,
         token::Comma,
-        AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, FnArg, GenericArgument,
-        GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, Meta, MetaNameValue, Path,
-        PathArguments, PathSegment, ReturnType, Type, TypePath, TypeReference,
+        AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, Fields, FieldsUnnamed, FnArg,
+        GenericArgument, GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, LitStr, Meta,
+        MetaNameValue, Path, PathArguments, PathSegment, ReturnType, Type, TypePath, TypeReference,
+        Variant,
 };
 
 // example usage:
@@ -153,4 +154,55 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
             #inl
             #f
         })
+}
+
+#[proc_macro_derive(IntoString)]
+pub fn into_string(input: TS) -> TS {
+        let input: TokenStream = input.into();
+
+        into_string_impl(input)
+                .map_or_else(|e| e.to_compile_error(), Into::<TokenStream>::into)
+                .into()
+}
+
+fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
+        let input = syn::DeriveInput::parse.parse2(input)?;
+        let ident = input.ident;
+
+        let variants = match input.data {
+                syn::Data::Enum(en) => en
+                        .variants
+                        .iter()
+                        .map(
+                                |Variant {
+                                         fields,
+                                         ident,
+                                         attrs,
+                                         ..
+                                 }| match fields {
+                                        Fields::Unnamed(FieldsUnnamed { unnamed, .. }) => {
+                                                if let Some(token_attr) = attrs.iter().find(|x| {
+                                                        x.path().get_ident().unwrap().to_string()
+                                                                == "token"
+                                                }) {
+                                                        let real = token_attr
+                                                                .parse_args::<LitStr>().unwrap();
+                                                        return quote!(Self::#ident => String::from(#real))
+                                                }
+                                                quote!(Self::#ident(bruh) => bruh)
+                                        }
+                                        _ => panic!("unsupported unit variant or whatever"),
+                                },
+                        )
+                        .collect::<Vec<_>>(),
+                _ => panic!("unsupported"),
+        };
+
+        Ok(quote!(impl Into<String> for #ident {
+                fn into(self) -> String {
+                        match self {
+                                #(#variants,)*
+                        }
+                }
+        }))
 }

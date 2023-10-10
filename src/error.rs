@@ -33,6 +33,15 @@ pub trait Error<I: InputType>: Sized {
                 location: &'static core::panic::Location<'static>,
                 token: I::Token,
         ) -> Self;
+
+        fn not_enough_elements(
+                span: Range<usize>,
+                found: usize,
+                expected: usize,
+                last_token: Option<I::Token>,
+        ) -> Self {
+                Self::unexpected_eof(span, None)
+        }
 }
 
 #[derive(Clone, Debug)]

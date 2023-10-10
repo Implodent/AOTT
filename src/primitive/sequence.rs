@@ -1,19 +1,19 @@
 use core::marker::PhantomData;
 
-use crate::{container::Seq, input::SliceInput, parser::Check, pfn_type};
+use crate::{container::Seq, input::SliceInput, iter::IterParser, parser::Check, pfn_type};
 
 use super::*;
 
 #[derive(Copy, Clone, Debug)]
-pub struct Repeated<P, O, V: FromIterator<O> = Vec<O>> {
+pub struct Repeated<P, O> {
         pub(crate) parser: P,
-        pub(crate) phantom: PhantomData<(O, V)>,
         pub(crate) at_least: usize,
         // Slightly evil: should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
         pub(crate) at_most: u64,
+        pub(crate) phantom: PhantomData<O>,
 }
 
-impl<P, O, V: FromIterator<O>> Repeated<P, O, V> {
+impl<P, O> Repeated<P, O> {
         pub fn at_least(self, at_least: usize) -> Self {
                 Self { at_least, ..self }
         }
@@ -32,69 +32,73 @@ impl<P, O, V: FromIterator<O>> Repeated<P, O, V> {
         }
 }
 
-#[inline(always)]
-#[track_caller]
-fn repeated_impl<
-        I: InputType,
-        O,
-        E: ParserExtras<I>,
-        P: Parser<I, O, E>,
-        V: FromIterator<O>,
-        M: Mode,
->(
+fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mode>(
+        this: &Repeated<P, O>,
         input: &mut Input<I, E>,
-        this: &Repeated<P, O, V>,
-        _m: &M,
-) -> PResult<I, M::Output<V>, E> {
-        let mut result = vec![];
-        let mut count = 0usize;
-        let res = loop {
-                if this.at_most != !0 && count as u64 >= this.at_most {
-                        break Ok(M::bind(|| result.into_iter().collect()));
-                }
+        state: &mut usize,
+) -> Result<Option<M::Output<O>>, E::Error> {
+        if this.at_most != !0 && *state >= this.at_most as usize {
+                return Ok(None);
+        }
 
-                let before = input.save();
-                match M::invoke(&this.parser, input) {
-                        Ok(o) => {
-                                M::invoke_unbind(|val| result.push(val), o);
-                        }
-                        Err(e) => {
-                                if count < this.at_least {
-                                        break Err(e);
-                                }
-                                input.rewind(before);
-                                break Ok(M::bind(|| result.into_iter().collect()));
-                        }
-                }
+        let before = input.offset;
 
-                #[cfg(feature = "tracing")]
-                if input.offset == before.offset {
-                        tracing::error!("found Repeated parser making no progress");
-                }
-
-                count += 1; // what the fuck
+        let Some(value) = M::invoke(&this.parser, input).ok() else {
+                return Ok(None);
         };
-        if count < this.at_least {
-                Err(Error::expected_token_found(
-                        input.span_since(I::prev(input.offset)),
-                        vec![],
-                        input.current().ok_or_else(|| {
-                                Error::unexpected_eof(input.span_since(I::prev(input.offset)), None)
-                        })?,
-                ))
-        } else {
-                res
+
+        *state += 1;
+
+        if *state < this.at_least {
+                return Err(Error::not_enough_elements(
+                        input.span_since(before),
+                        *state,
+                        this.at_least,
+                        None,
+                ));
+        }
+
+        Ok(Some(value))
+}
+
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                let mut state = self.create_state(input)?;
+                while let Some(_) = self.check_next(input, &mut state)? {}
+
+                Ok(())
+        }
+
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                let mut state = self.create_state(input)?;
+                while let Some(_) = self.check_next(input, &mut state)? {}
+
+                Ok(())
         }
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, V: FromIterator<O>> Parser<I, V, E>
-        for Repeated<P, O, V>
-{
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                repeated_impl(input, self, &Check)
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O> {
+        type Item = O;
+        type State = usize;
+
+        fn create_state(&self, _input: &mut Input<I, E>) -> Result<Self::State, E::Error> {
+                Ok(0)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, V, E> {
-                repeated_impl(input, self, &Emit)
+
+        fn next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<Self::Item>, E::Error> {
+                repeated_impl::<_, _, _, _, Emit>(self, input, state)
+        }
+
+        fn check_next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<()>, E::Error> {
+                repeated_impl::<_, _, _, _, Check>(self, input, state)
         }
 }
 
@@ -179,13 +183,11 @@ where
 /// let parser = delimited(just("\""), any::<_, extra::Err<_>>, just("\""));
 /// assert_eq!(parser.parse(input), Ok('h'));
 /// ```
-#[track_caller]
 pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         start_delimiter: impl Parser<I, O2, E>,
         content_parser: impl Parser<I, O, E>,
         end_delimiter: impl Parser<I, O1, E>,
 ) -> pfn_type!(I, O, E) {
-        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
                 start_delimiter.check_with(input)?;
                 let content = content_parser.parse_with(input)?;
@@ -196,18 +198,18 @@ pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
 }
 
 #[derive(Copy, Clone)]
-pub struct SeparatedBy<P, A, O, O2, V: FromIterator<O> = Vec<O>> {
+pub struct SeparatedBy<P, D, O, OD> {
         pub(crate) parser: P,
-        pub(crate) delimiter: A,
-        pub(crate) phantom: PhantomData<(O, O2, V)>,
+        pub(crate) delimiter: D,
         pub(crate) at_least: usize,
         // Slightly evil: should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
         pub(crate) at_most: u64,
         pub(crate) allow_leading: bool,
         pub(crate) allow_trailing: bool,
+        pub(crate) phantom: PhantomData<(O, OD)>,
 }
 
-impl<P, A, O, O2, V: FromIterator<O>> SeparatedBy<P, A, O, O2, V> {
+impl<P, D, O, OD> SeparatedBy<P, D, O, OD> {
         pub fn at_least(self, at_least: usize) -> Self {
                 Self { at_least, ..self }
         }
@@ -234,84 +236,81 @@ impl<P, A, O, O2, V: FromIterator<O>> SeparatedBy<P, A, O, O2, V> {
         }
 }
 
-#[inline(always)]
-#[track_caller]
-fn separated_by_impl<
+fn sep_impl<
         I: InputType,
         O,
-        O2,
+        OD,
         E: ParserExtras<I>,
         P: Parser<I, O, E>,
-        A: Parser<I, O2, E>,
-        V: FromIterator<O>,
+        D: Parser<I, OD, E>,
         M: Mode,
 >(
+        this: &SeparatedBy<P, D, O, OD>,
         input: &mut Input<I, E>,
-        this: &SeparatedBy<P, A, O, O2, V>,
-        _m: &M,
-) -> PResult<I, M::Output<V>, E> {
-        let mut result = vec![];
-        let mut count = 0usize;
-        if this.allow_trailing {
-                let befunge = input.save();
-                this.delimiter
-                        .check_with(input)
-                        .unwrap_or_else(|_| input.rewind(befunge));
+        state: &mut usize,
+) -> Result<Option<M::Output<O>>, E::Error> {
+        if this.at_most != !0 && *state >= this.at_most as usize {
+                if this.allow_trailing {
+                        let before_delimiter = input.save();
+                        if let Err(_) = this.delimiter.check_with(input) {
+                                input.rewind(before_delimiter);
+                        }
+                }
+                return Ok(None);
         }
-        let res = loop {
-                if this.at_most != !0 && count as u64 >= this.at_most {
-                        break Ok(M::bind(|| result.into_iter().collect()));
-                }
 
-                let before = input.save();
-                match M::invoke(&this.parser, input) {
-                        Ok(o) => {
-                                M::invoke_unbind(|val| result.push(val), o);
-                        }
-                        Err(e) => {
-                                if count < this.at_least {
-                                        break Err(e);
-                                }
-                                input.rewind(before);
-                                break Ok(M::bind(|| result.into_iter().collect()));
-                        }
-                }
+        let before = input.offset;
 
-                count += 1; // what the fuck
+        if *state > 0 {
+                this.delimiter.check_with(input)?;
+        } else if this.allow_leading && *state == 0 {
+                let before_delimiter = input.save();
+                if let Err(_) = this.delimiter.check_with(input) {
+                        input.rewind(before_delimiter);
+                }
+        }
+
+        let Some(value) = M::invoke(&this.parser, input).ok() else {
+                return Ok(None);
         };
-        if count < this.at_least {
-                Err(Error::expected_token_found(
-                        input.span_since(I::prev(input.offset)),
-                        vec![],
-                        input.current().ok_or_else(|| {
-                                Error::unexpected_eof(input.span_since(I::prev(input.offset)), None)
-                        })?,
-                ))
-        } else {
-                if this.allow_leading {
-                        let befunge = input.save();
-                        this.delimiter
-                                .check_with(input)
-                                .unwrap_or_else(|_| input.rewind(befunge));
-                }
-                res
+
+        *state += 1;
+
+        if *state < this.at_least {
+                return Err(Error::not_enough_elements(
+                        input.span_since(before),
+                        *state,
+                        this.at_least,
+                        None,
+                ));
         }
+
+        Ok(Some(value))
 }
 
-impl<
-                I: InputType,
-                O,
-                E: ParserExtras<I>,
-                P: Parser<I, O, E>,
-                O2,
-                A: Parser<I, O2, E>,
-                V: FromIterator<O>,
-        > Parser<I, V, E> for SeparatedBy<P, A, O, O2, V>
+impl<I: InputType, O, OD, E: ParserExtras<I>, P: Parser<I, O, E>, D: Parser<I, OD, E>>
+        IterParser<I, E> for SeparatedBy<P, D, O, OD>
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                separated_by_impl(input, self, &Check)
+        type Item = O;
+        type State = usize;
+
+        fn create_state(&self, _input: &mut Input<I, E>) -> Result<Self::State, E::Error> {
+                Ok(0)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, V, E> {
-                separated_by_impl(input, self, &Emit)
+
+        fn next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<Self::Item>, E::Error> {
+                sep_impl::<_, _, _, _, _, _, Emit>(self, input, state)
+        }
+
+        fn check_next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<()>, E::Error> {
+                sep_impl::<_, _, _, _, _, _, Check>(self, input, state)
         }
 }
