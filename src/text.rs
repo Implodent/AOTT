@@ -556,11 +556,10 @@ impl<
 /// assert_eq!(whitespace.parse(""), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
-) -> impl Parser<I, (), E> {
+) -> Repeated<impl Parser<I, (), E>, (), ()> {
         filter(|c: &I::Token| c.is_whitespace())
                 .ignored()
-                .repeated()
-                .ignored()
+                .repeated_custom()
 }
 /// A parser that accepts (and ignores) any number of inline whitespace characters.
 ///

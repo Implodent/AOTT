@@ -321,6 +321,27 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         {
                 self.input.slice(self.span_since(before))
         }
+
+        #[inline(always)]
+        pub fn with_context<E2: ParserExtras<I>>(
+                &self,
+                cx: &'parse E2::Context,
+        ) -> Input<'parse, I, E2> {
+                Input {
+                        input: self.input,
+                        cx,
+                        offset: self.offset,
+                }
+        }
+
+        #[inline(always)]
+        pub fn no_context<E2: ParserExtras<I, Context = ()>>(&self) -> Input<'parse, I, E2> {
+                Input {
+                        input: self.input,
+                        cx: &(),
+                        offset: self.offset,
+                }
+        }
 }
 
 #[derive(Debug, Clone, Copy)]
