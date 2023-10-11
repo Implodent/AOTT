@@ -258,11 +258,11 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMapWithSpan(self, f, PhantomData, PhantomData)
         }
-        fn filter<F: Fn(&O) -> bool>(self, f: F) -> FilterParser<Self, F, O>
+        fn filter<F: Fn(&O) -> bool, L: Clone>(self, f: F, label: L) -> FilterParser<Self, F, O, L>
         where
                 Self: Sized,
         {
-                FilterParser(self, f, PhantomData)
+                FilterParser(self, f, label, PhantomData)
         }
 
         /// # Example

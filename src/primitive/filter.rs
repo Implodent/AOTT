@@ -1,13 +1,12 @@
 use core::marker::PhantomData;
 
 use crate::{
-        error::Error,
+        error::{Error, Filtering, FundamentalError, LabelError},
         input::{Input, InputType},
         parser::*,
         pfn_type, PResult,
 };
 
-#[track_caller]
 fn filter_impl<
         I: InputType,
         O,
@@ -15,29 +14,41 @@ fn filter_impl<
         A: Parser<I, O, E>,
         F: Fn(&O) -> bool,
         M: Mode,
+        L: Clone,
 >(
         _mode: &M,
-        this: &FilterParser<A, F, O>,
+        this: &FilterParser<A, F, O, L>,
         input: &mut Input<I, E>,
-) -> PResult<I, M::Output<O>, E> {
+) -> PResult<I, M::Output<O>, E>
+where
+        E::Error: LabelError<I, L>,
+{
         let offset = input.offset;
         this.0.parse_with(input).and_then(|thing| {
                 if this.1(&thing) {
                         Ok(M::bind(|| thing))
                 } else {
-                        let err = Error::filter_failed(
+                        let err = LabelError::from_label(
                                 input.span_since(offset),
-                                core::panic::Location::caller(),
-                                input.current().expect("what"),
+                                this.2.clone(),
+                                input.current(),
                         );
                         Err(err)
                 }
         })
 }
 
-pub struct FilterParser<A, F, O>(pub(crate) A, pub(crate) F, pub(crate) PhantomData<O>);
-impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool> Parser<I, O, E>
-        for FilterParser<A, F, O>
+pub struct FilterParser<A, F, O, L>(
+        pub(crate) A,
+        pub(crate) F,
+        pub(crate) L,
+        pub(crate) PhantomData<O>,
+);
+
+impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool, L: Clone>
+        Parser<I, O, E> for FilterParser<A, F, O, L>
+where
+        E::Error: LabelError<I, L>,
 {
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 filter_impl(&Check, self, input)
@@ -49,30 +60,33 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool>
 }
 
 #[track_caller]
-pub fn filter<I: InputType, E: ParserExtras<I>>(
+pub fn filter<I: InputType, E: ParserExtras<I>, L: Clone>(
         filter: impl Fn(&I::Token) -> bool,
-) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E> {
-        #[cfg_attr(feature = "nightly", track_caller)]
+        label: L,
+) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E>
+where
+        E::Error: LabelError<I, L>,
+{
         move |input| {
                 let befunge = input.offset;
                 match input.next_or_none() {
                         Some(el) if filter(&el) => Ok(el),
-                        Some(other) => Err(Error::filter_failed(
+                        other => Err(LabelError::from_label(
                                 input.span_since(befunge),
-                                core::panic::Location::caller(),
+                                label.clone(),
                                 other,
                         )),
-                        None => Err(Error::unexpected_eof(input.span_since(befunge), None)),
                 }
         }
 }
 
-#[track_caller]
-pub fn filter_map<I: InputType, E: ParserExtras<I>, U>(
+pub fn filter_map<I: InputType, E: ParserExtras<I>, U, L: Clone>(
         mapper: impl Fn(I::Token) -> Option<U>,
+        label: L,
 ) -> pfn_type!(I, U, E)
 where
         I::Token: Clone,
+        E::Error: LabelError<I, L>,
 {
         #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
@@ -80,10 +94,10 @@ where
                 let next = input.next()?;
 
                 mapper(next).ok_or_else(|| {
-                        Error::filter_failed(
+                        LabelError::from_label(
                                 input.span_since(befunge),
-                                core::panic::Location::caller(),
-                                input.current().expect("eof"),
+                                label.clone(),
+                                input.current(),
                         )
                 })
         }
@@ -120,3 +134,13 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>> Parser<I, O, E> fo
 pub fn rewind<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>>(parser: A) -> Rewind<A> {
         Rewind(parser)
 }
+
+/// Creates a [`Filtering`]
+#[must_use]
+pub fn filtering(what: impl Into<Cow<'static, str>>) -> Filtering {
+        Filtering(what.into())
+}
+
+/// Implement `LabelError<I, Filtering>` to use `filter*` with your error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Filtering(Cow<'static, str>);

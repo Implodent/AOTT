@@ -1,6 +1,7 @@
-use crate::error::Error;
+use crate::error::{Error, FundamentalError};
 use crate::input::InputType;
 use crate::parser::ParserExtras;
+use crate::text::Char;
 use core::fmt::{Debug, Display};
 use core::marker::PhantomData;
 use core::ops::Range;
@@ -29,18 +30,7 @@ impl<Item: Debug + 'static> core::error::Error for Simple<Item> {
         }
 }
 
-impl<Item: Clone, I: InputType<Token = Item>> Error<I> for Simple<Item> {
-        fn filter_failed(
-                span: Range<usize>,
-                location: &'static core::panic::Location<'static>,
-                token: <I as InputType>::Token,
-        ) -> Self {
-                Self::FilterFailed {
-                        span,
-                        location,
-                        token,
-                }
-        }
+impl<Item, I: InputType<Token = Item>> FundamentalError<I> for Simple<Item> {
         fn expected_eof_found(span: Range<usize>, found: Item) -> Self {
                 Self::ExpectedEOF { found, span }
         }
@@ -78,27 +68,10 @@ pub enum Simple<Item> {
                 expected: Vec<Item>,
                 found: Item,
         },
-        FilterFailed {
-                span: Range<usize>,
-                location: &'static core::panic::Location<'static>,
-                token: Item,
-        },
         #[cfg(feature = "builtin-text")]
-        ExpectedKeyword {
+        Text {
                 span: Range<usize>,
-                keyword: String,
-                found: String,
-        },
-        #[cfg(feature = "builtin-text")]
-        ExpectedDigit {
-                span: Range<usize>,
-                radix: u32,
-                found: char,
-        },
-        #[cfg(feature = "builtin-text")]
-        ExpectedIdent {
-                span: Range<usize>,
-                found: char,
+                error: crate::text::TextLabel<Token>,
         },
 }
 

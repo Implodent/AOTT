@@ -23,7 +23,7 @@ mod tuple;
 use aott_derive::parser;
 pub use choice::*;
 pub use filter::*;
-pub use just::just;
+pub use just::*;
 pub use map::*;
 pub use recursive::*;
 pub use sequence::*;

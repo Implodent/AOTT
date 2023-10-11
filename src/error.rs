@@ -1,8 +1,10 @@
 use core::ops::Range;
 
+use alloc::borrow::Cow;
+
 use crate::{input::InputType, parser::ParserExtras};
 
-pub trait Error<I: InputType>: Sized {
+pub trait FundamentalError<I: InputType>: Sized {
         /// expected end of input at `span`, found `found`
         fn expected_eof_found(span: Range<usize>, found: I::Token) -> Self;
 
@@ -26,23 +28,23 @@ pub trait Error<I: InputType>: Sized {
                         None => Self::unexpected_eof(span, Some(expected)),
                 }
         }
-
-        /// a filter failed at `span` in `location`, the token that did not pass was `token`
-        fn filter_failed(
-                span: Range<usize>,
-                location: &'static core::panic::Location<'static>,
-                token: I::Token,
-        ) -> Self;
-
-        fn not_enough_elements(
-                span: Range<usize>,
-                found: usize,
-                expected: usize,
-                last_token: Option<I::Token>,
-        ) -> Self {
-                Self::unexpected_eof(span, None)
-        }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BuiltinLabel<Token> {
+        NotEnoughElements {
+                expected_amount: usize,
+                found_amount: usize,
+        },
+}
+
+pub trait LabelError<I: InputType, L>: Sized {
+        fn from_label(span: Range<usize>, label: L, last_token: Option<I::Token>) -> Self;
+}
+
+/// A trait for AOTT errors. It's done like this so general things that use filter (and similar) would use this onnnne
+pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel<I::Token>> {}
+impl<I: InputType, E: Error<I> + LabelError<I, BuiltinLabel<I::Token>>> Error<I> for E {}
 
 #[derive(Clone, Debug)]
 pub struct Located<T, E> {
