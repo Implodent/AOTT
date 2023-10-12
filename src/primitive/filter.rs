@@ -1,5 +1,7 @@
 use core::marker::PhantomData;
 
+use alloc::borrow::Cow;
+
 use crate::{
         error::{Error, Filtering, FundamentalError, LabelError},
         input::{Input, InputType},
@@ -59,7 +61,6 @@ where
         }
 }
 
-#[track_caller]
 pub fn filter<I: InputType, E: ParserExtras<I>, L: Clone>(
         filter: impl Fn(&I::Token) -> bool,
         label: L,
@@ -88,7 +89,6 @@ where
         I::Token: Clone,
         E::Error: LabelError<I, L>,
 {
-        #[cfg_attr(feature = "nightly", track_caller)]
         move |input| {
                 let befunge = input.offset;
                 let next = input.next()?;
@@ -140,7 +140,3 @@ pub fn rewind<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>>(parser: A
 pub fn filtering(what: impl Into<Cow<'static, str>>) -> Filtering {
         Filtering(what.into())
 }
-
-/// Implement `LabelError<I, Filtering>` to use `filter*` with your error.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Filtering(Cow<'static, str>);

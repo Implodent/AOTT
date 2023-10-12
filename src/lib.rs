@@ -8,7 +8,12 @@
 )]
 #![cfg_attr(
         feature = "nightly",
-        feature(associated_type_defaults, never_type, min_specialization)
+        feature(
+                associated_type_defaults,
+                never_type,
+                negative_impls,
+                min_specialization
+        )
 )]
 #![cfg_attr(all(feature = "nightly", not(feature = "std")), feature(error_in_core))]
 #![cfg_attr(not(feature = "std"), no_std)]

@@ -3,7 +3,7 @@ use core::{borrow::Borrow, marker::PhantomData, ops::Range};
 use crate::{
         container::OrderedSeq,
         derive::parser,
-        error::Error,
+        error::{Error, FundamentalError, LabelError},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
         pfn_type,
@@ -16,14 +16,28 @@ mod private {
         pub trait Sealed {}
 }
 
-pub trait CharError<C: Char>: for<'a> crate::error::Error<&'a C::Str> {
-        fn expected_ident_char(span: Range<usize>, got: C) -> Self;
-        fn expected_keyword<'a, 'b: 'a>(
-                span: Range<usize>,
-                keyword: &'b C::Str,
-                actual: &'a C::Str,
-        ) -> Self;
-        fn expected_digit(span: Range<usize>, radix: u32, got: C) -> Self;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
+pub enum IdentKind {
+        Start,
+        Continue,
+        Alphabetic,
+        Alphanumeric,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, derive_more::Display)]
+pub enum CharLabel<C: Char> {
+        #[display(fmt = "expected identifier {_0} character")]
+        ExpectedIdent(IdentKind),
+        #[display(fmt = "expected keyword {}", "_0.as_ref().display()")]
+        ExpectedKeyword(C::Owned),
+        #[display(fmt = "expected digit with radix {_0}")]
+        ExpectedDigit(u32),
+        #[display(fmt = "expected newline")]
+        Newline,
+        #[display(fmt = "expected whitespace or newline")]
+        Whitespace,
+        #[display(fmt = "expected inline whitespace")]
+        InlineWhitespace,
 }
 
 /// A trait implemented by textual character types (currently, [`u8`] and [`char`]).
@@ -34,7 +48,8 @@ pub trait Char: Sized + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
         /// The default unsized [`str`]-like type of a linear sequence of this character.
         ///
         /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + 'static;
+        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + core::fmt::Display + 'static;
+        type Owned: 'static + AsRef<Self::Str>;
 
         /// Convert the given ASCII character to this character type.
         fn from_ascii(c: u8) -> Self;
@@ -65,11 +80,15 @@ pub trait Char: Sized + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
 
         /// Turn a string of this character type into an iterator over those characters.
         fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_>;
+
+        /// Turns a string of this character into the owned string.
+        fn owned(s: &Self::Str) -> Self::Owned;
 }
 
 impl Sealed for char {}
 impl Char for char {
         type Str = str;
+        type Owned = String;
 
         fn from_ascii(c: u8) -> Self {
                 c as char
@@ -102,11 +121,16 @@ impl Char for char {
         fn is_ident_continue(&self) -> bool {
                 unicode_ident::is_xid_continue(*self)
         }
+
+        fn owned(s: &Self::Str) -> Self::Owned {
+                s.to_owned()
+        }
 }
 
 impl Sealed for u8 {}
 impl Char for u8 {
         type Str = [u8];
+        type Owned = Vec<u8>;
 
         fn from_ascii(c: u8) -> Self {
                 c
@@ -139,9 +163,15 @@ impl Char for u8 {
         fn is_ident_continue(&self) -> bool {
                 self.to_char().is_ident_continue()
         }
+
+        fn owned(s: &Self::Str) -> Self::Owned {
+                s.to_owned()
+        }
 }
 
 pub mod ascii {
+        use crate::error::LabelError;
+
         use super::*;
 
         /// A parser that accepts a C-style identifier.
@@ -162,14 +192,18 @@ pub mod ascii {
                 inp: I,
         ) -> &'c C::Str
         where
-                E::Error: CharError<C>,
+                E::Error: LabelError<I, CharLabel<C>>,
         {
                 let before = inp.offset;
                 let cr = inp.next()?;
                 let chr = cr.to_char();
                 let span = inp.span_since(before);
                 if !(chr.is_ascii_alphabetic() || chr == '_') {
-                        return Err(CharError::expected_ident_char(span, cr));
+                        return Err(LabelError::from_label(
+                                span,
+                                CharLabel::ExpectedIdent(IdentKind::Alphabetic),
+                                Some(cr),
+                        ));
                 }
                 skip_while(|c: &C| c.to_char().is_ascii_alphanumeric() || c.to_char() == '_')(inp)?;
                 Ok(inp.input.slice(inp.span_since(before)))
@@ -189,7 +223,7 @@ pub mod ascii {
         ) -> impl Fn(&mut Input<I, E>) -> PResult<I, &'a C::Str, E>
         where
                 C::Str: PartialEq,
-                E::Error: CharError<C>,
+                E::Error: LabelError<I, CharLabel<C>>,
         {
                 #[cfg(debug_assertions)]
                 {
@@ -208,7 +242,11 @@ pub mod ascii {
                         let ident = ident(input)?;
                         if ident != keyword.as_ref() {
                                 let span = input.span_since(before);
-                                return Err(CharError::expected_keyword(span, keyword, ident));
+                                return Err(LabelError::from_label(
+                                        span,
+                                        CharLabel::ExpectedKeyword(C::owned(keyword)),
+                                        input.current(),
+                                ));
                         }
                         Ok(input.input.slice(input.span_since(before)))
                 }
@@ -261,9 +299,10 @@ where
 {
         // parses \r, which is either the OSX newline, or the start of a Windows newline (\r\n)
         (cr.optional().ignore_then(lf)) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
-                .or(filter(|cr: &I::Token| {
-                        NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char())
-                }))
+                .or(filter(
+                        |cr: &I::Token| NEWLINE_CHARACTERS_AFTER_CRLF.contains(&cr.to_char()),
+                        CharLabel::Newline,
+                ))
                 .ignored()
                 .parse_with(input)
 }
@@ -318,7 +357,7 @@ pub fn just_ignore_case<
                                 {
                                         None
                                 }
-                                (_, found) => Some(Error::expected_token_found_or_eof(
+                                (_, found) => Some(FundamentalError::expected_token_found_or_eof(
                                         input.span_since(befunge),
                                         vec![next.into_clone()],
                                         found,
@@ -362,12 +401,16 @@ pub mod unicode {
                 input: I,
         ) -> &'a C::Str
         where
-                E::Error: CharError<C>,
+                E::Error: LabelError<I, CharLabel<C>>,
         {
                 let before = input.offset;
                 let c = input.next()?;
                 if !c.is_ident_start() {
-                        return Err(CharError::expected_ident_char(input.span_since(before), c));
+                        return Err(LabelError::from_label(
+                                input.span_since(before),
+                                CharLabel::ExpectedIdent(IdentKind::Start),
+                                Some(c),
+                        ));
                 }
                 skip_while(|c: &C| c.is_ident_continue())(input)?;
                 Ok(input.input.slice(input.span_since(before)))
@@ -403,7 +446,7 @@ pub mod unicode {
         ) -> pfn_type!(I, &'a C::Str, E)
         where
                 C::Str: PartialEq + Display,
-                E::Error: CharError<C>,
+                E::Error: LabelError<I, CharLabel<C>>,
         {
                 #[cfg(debug_assertions)]
                 {
@@ -421,9 +464,13 @@ pub mod unicode {
                         let befunge = input.offset;
                         let s = ident::<I, C, E>(input)?;
                         let span = input.span_since(befunge);
-                        (s == keyword.as_ref())
-                                .then_some(s)
-                                .ok_or_else(|| CharError::expected_keyword(span, keyword, s))
+                        (s == keyword.as_ref()).then_some(s).ok_or_else(|| {
+                                LabelError::from_label(
+                                        span,
+                                        CharLabel::ExpectedKeyword(C::owned(keyword)),
+                                        input.current(),
+                                )
+                        })
                 }
         }
 }
@@ -456,10 +503,14 @@ where
         C: Char,
         I: InputType<Token = C>,
         E: ParserExtras<I>,
+        E::Error: LabelError<I, CharLabel<C>>,
 {
-        filter(move |c: &C| c.is_digit(radix))
-                .repeated()
-                .at_least(1)
+        filter(
+                move |c: &C| c.is_digit(radix),
+                CharLabel::ExpectedDigit(radix),
+        )
+        .repeated()
+        .at_least(1)
 }
 
 /// Parses a non-negative integer in the specified radix.
@@ -475,25 +526,27 @@ pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
         radix: u32,
 ) -> pfn_type!(I, &'a C::Str, E)
 where
-        E::Error: CharError<C>,
+        E::Error: LabelError<I, CharLabel<C>>,
 {
         move |input| {
                 with_slice(input, move |input| {
                         let cr = input.next()?;
                         let befunge = input.offset;
                         if !(cr.is_digit(radix) && cr != C::digit_zero()) {
-                                return Err(CharError::expected_digit(
+                                return Err(LabelError::from_label(
                                         input.span_since(befunge),
-                                        radix,
-                                        cr,
+                                        CharLabel::ExpectedDigit(radix),
+                                        Some(cr),
                                 ));
                         }
-                        // hehe
-                        any.filter(move |cr: &C| cr.is_digit(radix))
-                                .repeated()
-                                .ignored()
-                                .or(just(C::digit_zero()).ignored())
-                                .check_with(input)
+                        filter(
+                                move |cr: &C| cr.is_digit(radix),
+                                CharLabel::ExpectedDigit(radix),
+                        )
+                        .repeated()
+                        .ignored()
+                        .or(just(C::digit_zero()).ignored())
+                        .check_with(input)
                 })
         }
 }
@@ -557,7 +610,7 @@ impl<
 /// ```
 pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, ()> {
-        filter(|c: &I::Token| c.is_whitespace())
+        filter(|c: &I::Token| c.is_whitespace(), CharLabel::Whitespace)
                 .ignored()
                 .repeated()
 }
@@ -583,7 +636,10 @@ pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, ()> {
-        filter(|c: &I::Token| c.is_inline_whitespace())
-                .ignored()
-                .repeated()
+        filter(
+                |c: &I::Token| c.is_inline_whitespace(),
+                CharLabel::InlineWhitespace,
+        )
+        .ignored()
+        .repeated()
 }

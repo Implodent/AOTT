@@ -5,7 +5,7 @@ use core::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,
-        error::Error,
+        error::{Error, FundamentalError},
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
         pfn_type, EmptyPhantom, PResult,
@@ -71,7 +71,10 @@ pub fn end<I: InputType, E: ParserExtras<I>>(input: I) {
         let offset = input.offset;
         match input.next_or_none() {
                 Some(found) => {
-                        let err = Error::expected_eof_found(input.span_since(offset), found);
+                        let err = FundamentalError::expected_eof_found(
+                                input.span_since(offset),
+                                found,
+                        );
                         Err(err)
                 }
                 None => Ok(()),

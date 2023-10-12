@@ -1,6 +1,13 @@
 use core::marker::PhantomData;
 
-use crate::{container::Seq, input::SliceInput, iter::IterParser, parser::Check, pfn_type};
+use crate::{
+        container::Seq,
+        error::{BuiltinLabel, LabelError},
+        input::SliceInput,
+        iter::IterParser,
+        parser::Check,
+        pfn_type,
+};
 
 use super::*;
 
@@ -143,19 +150,29 @@ pub fn with_slice<
         Ok(slice)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SeqLabel<Item> {
+        OneOf(Vec<Item>),
+        NoneOf(Vec<Item>),
+}
+
 /// A parser that accepts only one token out of the `things`.
 /// For example, you could pass a `&str` as `things`, and it would result in a parser,
 /// that would match any character that `things` contains.
 /// That works the same with an array, and really, anything that implements `Seq<I::Token>`.
-#[track_caller]
 pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
 ) -> pfn_type!(I, I::Token, E)
 where
-        I::Token: PartialEq,
+        I::Token: PartialEq + Clone,
 {
-        #[cfg_attr(feature = "nightly", track_caller)]
-        move |input| filter(|thing| things.contains(thing)).parse_with(input)
+        move |input| {
+                filter(
+                        |thing| things.contains(thing),
+                        SeqLabel::OneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
+                )
+                .parse_with(input)
+        }
 }
 
 /// A parser that accepts any token **except** ones contained in `things`.
@@ -168,10 +185,15 @@ pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
 ) -> pfn_type!(I, I::Token, E)
 where
-        I::Token: PartialEq,
+        I::Token: PartialEq + Clone,
 {
-        #[cfg_attr(feature = "nightly", track_caller)]
-        move |input| filter(|thing| !things.contains(thing)).parse_with(input)
+        move |input| {
+                filter(
+                        |thing| !things.contains(thing),
+                        SeqLabel::NoneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
+                )
+                .parse_with(input)
+        }
 }
 
 /// A parser that parser the content, preceded by the `start_delimiter` and terminated by the `end_delimiter`.
@@ -248,7 +270,10 @@ fn sep_impl<
         this: &SeparatedBy<P, D, O, OD>,
         input: &mut Input<I, E>,
         state: &mut usize,
-) -> Result<Option<M::Output<O>>, E::Error> {
+) -> Result<Option<M::Output<O>>, E::Error>
+where
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
+{
         if this.at_most != !0 && *state >= this.at_most as usize {
                 if this.allow_trailing {
                         let before_delimiter = input.save();
@@ -277,11 +302,13 @@ fn sep_impl<
         *state += 1;
 
         if *state < this.at_least {
-                return Err(Error::not_enough_elements(
+                return Err(LabelError::from_label(
                         input.span_since(before),
-                        *state,
-                        this.at_least,
-                        None,
+                        BuiltinLabel::NotEnoughElements {
+                                expected_amount: this.at_least,
+                                found_amount: *state,
+                        },
+                        input.current(),
                 ));
         }
 
@@ -290,6 +317,8 @@ fn sep_impl<
 
 impl<I: InputType, O, OD, E: ParserExtras<I>, P: Parser<I, O, E>, D: Parser<I, OD, E>>
         IterParser<I, E> for SeparatedBy<P, D, O, OD>
+where
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
         type Item = O;
         type State = usize;

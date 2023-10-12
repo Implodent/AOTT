@@ -31,7 +31,7 @@ pub trait FundamentalError<I: InputType>: Sized {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum BuiltinLabel<Token> {
+pub enum BuiltinLabel {
         NotEnoughElements {
                 expected_amount: usize,
                 found_amount: usize,
@@ -43,8 +43,8 @@ pub trait LabelError<I: InputType, L>: Sized {
 }
 
 /// A trait for AOTT errors. It's done like this so general things that use filter (and similar) would use this onnnne
-pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel<I::Token>> {}
-impl<I: InputType, E: Error<I> + LabelError<I, BuiltinLabel<I::Token>>> Error<I> for E {}
+pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel> {}
+impl<I: InputType, E: Error<I> + LabelError<I, BuiltinLabel>> Error<I> for E {}
 
 #[derive(Clone, Debug)]
 pub struct Located<T, E> {
@@ -60,3 +60,7 @@ impl<T, E> Located<T, E> {
 }
 
 pub type PResult<I, O, E = crate::extra::Err<I>> = Result<O, <E as ParserExtras<I>>::Error>;
+
+/// Implement `LabelError<I, Filtering>` to use `filter*` with your error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Filtering(pub Cow<'static, str>);
