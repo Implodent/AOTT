@@ -3,7 +3,7 @@ use core::marker::PhantomData;
 use alloc::borrow::Cow;
 
 use crate::{
-        error::{Error, Filtering, FundamentalError, LabelError},
+        error::{Filtering, LabelError},
         input::{Input, InputType},
         parser::*,
         pfn_type, PResult,

@@ -2,7 +2,7 @@ use crate::error::{Error, FundamentalError};
 use crate::input::InputType;
 use crate::parser::ParserExtras;
 use crate::text::Char;
-use core::fmt::{Debug, Display};
+use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::ops::Range;
 

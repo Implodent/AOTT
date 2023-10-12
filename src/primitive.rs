@@ -5,7 +5,7 @@ use core::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,
-        error::{Error, FundamentalError},
+        error::FundamentalError,
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
         pfn_type, EmptyPhantom, PResult,

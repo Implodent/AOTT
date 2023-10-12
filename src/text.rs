@@ -1,9 +1,9 @@
-use core::{borrow::Borrow, marker::PhantomData, ops::Range};
+use core::{borrow::Borrow, marker::PhantomData};
 
 use crate::{
         container::OrderedSeq,
         derive::parser,
-        error::{Error, FundamentalError, LabelError},
+        error::{FundamentalError, LabelError},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
         pfn_type,

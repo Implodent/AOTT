@@ -13,10 +13,9 @@ use syn::{
         parse::{Parse, Parser},
         punctuated::Punctuated,
         token::Comma,
-        AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, Fields, FieldsUnnamed, FnArg,
-        GenericArgument, GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, LitStr, Meta,
-        MetaNameValue, Path, PathArguments, PathSegment, ReturnType, Type, TypePath, TypeReference,
-        Variant,
+        AngleBracketedGenericArguments, Expr, ExprLit, ExprPath, Fields, FnArg, GenericArgument,
+        GenericParam, ItemFn, Lifetime, LifetimeParam, Lit, LitStr, Meta, MetaNameValue, Path,
+        PathArguments, PathSegment, ReturnType, Type, TypePath, TypeReference, Variant,
 };
 
 // example usage:
@@ -180,7 +179,7 @@ fn into_string_impl(input: TokenStream) -> syn::Result<TokenStream> {
                                          attrs,
                                          ..
                                  }| match fields {
-                                        Fields::Unnamed(FieldsUnnamed { unnamed, .. }) => {
+                                        Fields::Unnamed(_) => {
                                                 quote!(Self::#ident(bruh) => bruh)
                                         }
                                         Fields::Unit => {
