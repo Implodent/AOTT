@@ -109,7 +109,7 @@ macro_rules! select {
         $crate::primitive::filter_map(|__token| match __token {
             $($pat$(if $guard)? => Some($res),)*
             _ => None
-        })
+        }, $crate::filter::filtering(concat!("any of ", $(stringify!($pat)$(, "if ", stringify!($guard))?)*)))
     };
 }
 

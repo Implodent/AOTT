@@ -19,7 +19,7 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 
 macro_rules! simple {
         ($bound:tt) => {
-                #[derive(Debug, Clone, PartialEq, Eq, derive_more::Display)]
+                #[derive(Debug, Clone, derive_more::Display)]
                 #[display(bound = concat!("Item: Debug + ", stringify!($bound)))]
                 pub enum Simple<Item: $bound> {
                         #[display(
@@ -145,5 +145,12 @@ macro_rules! simple {
 
 #[cfg(feature = "builtin-text")]
 simple!(Char);
+
 #[cfg(not(feature = "builtin-text"))]
-simple!(Sized);
+simple!(Nothing);
+
+#[cfg(not(feature = "builtin-text"))]
+trait Nothing {}
+
+#[cfg(not(feature = "builtin-text"))]
+impl<T: ?Sized> Nothing for T {}
