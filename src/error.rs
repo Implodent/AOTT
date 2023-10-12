@@ -30,8 +30,11 @@ pub trait FundamentalError<I: InputType>: Sized {
         }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, derive_more::Display)]
 pub enum BuiltinLabel {
+        #[display(
+                fmt = "not enough elements: expected {expected_amount} elements, but found {found_amount}"
+        )]
         NotEnoughElements {
                 expected_amount: usize,
                 found_amount: usize,

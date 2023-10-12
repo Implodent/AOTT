@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::{
-        error::{Error, Located},
+        error::{FundamentalError as Error, Located},
         extra,
         parser::{Parser, ParserExtras},
         text::Char,

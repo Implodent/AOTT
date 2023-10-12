@@ -28,7 +28,7 @@ pub enum IdentKind {
 pub enum CharLabel<C: Char> {
         #[display(fmt = "expected identifier {_0} character")]
         ExpectedIdent(IdentKind),
-        #[display(fmt = "expected keyword {}", "_0.as_ref().display()")]
+        #[display(fmt = "expected keyword {:?}", "_0.as_ref()")]
         ExpectedKeyword(C::Owned),
         #[display(fmt = "expected digit with radix {_0}")]
         ExpectedDigit(u32),
@@ -44,12 +44,12 @@ pub enum CharLabel<C: Char> {
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
 /// implement this trait, please [open an issue/PR](https://github.com/Implodent/AOTT/issues/new).
-pub trait Char: Sized + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
+pub trait Char: Sized + Clone + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
         /// The default unsized [`str`]-like type of a linear sequence of this character.
         ///
         /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + core::fmt::Display + 'static;
-        type Owned: 'static + AsRef<Self::Str>;
+        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + core::fmt::Debug + 'static;
+        type Owned: 'static + AsRef<Self::Str> + Clone + PartialEq + Eq + core::fmt::Debug;
 
         /// Convert the given ASCII character to this character type.
         fn from_ascii(c: u8) -> Self;
@@ -295,7 +295,8 @@ static NEWLINE_CHARACTERS_AFTER_CRLF: [char; 6] = [
 #[parser(extras = E)]
 pub fn newline<I: InputType, E: ParserExtras<I>>(input: I)
 where
-        I::Token: Char + PartialEq,
+        I::Token: Char + PartialEq + Clone,
+        E::Error: LabelError<I, CharLabel<I::Token>>,
 {
         // parses \r, which is either the OSX newline, or the start of a Windows newline (\r\n)
         (cr.optional().ignore_then(lf)) // parses \n, which is either a Linux newline, or the end of a Windows newline (\r\n)
@@ -609,7 +610,10 @@ impl<
 /// assert_eq!(whitespace.parse(""), Ok(()));
 /// ```
 pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
-) -> Repeated<impl Parser<I, (), E>, ()> {
+) -> Repeated<impl Parser<I, (), E>, ()>
+where
+        E::Error: LabelError<I, CharLabel<C>>,
+{
         filter(|c: &I::Token| c.is_whitespace(), CharLabel::Whitespace)
                 .ignored()
                 .repeated()
@@ -635,7 +639,10 @@ pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").is_err());
 /// ```
 pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
-) -> Repeated<impl Parser<I, (), E>, ()> {
+) -> Repeated<impl Parser<I, (), E>, ()>
+where
+        E::Error: LabelError<I, CharLabel<C>>,
+{
         filter(
                 |c: &I::Token| c.is_inline_whitespace(),
                 CharLabel::InlineWhitespace,

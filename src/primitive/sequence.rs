@@ -57,11 +57,13 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         *state += 1;
 
         if *state < this.at_least {
-                return Err(Error::not_enough_elements(
+                return Err(LabelError::from_label(
                         input.span_since(before),
-                        *state,
-                        this.at_least,
-                        None,
+                        BuiltinLabel::NotEnoughElements {
+                                expected_amount: this.at_least,
+                                found_amount: *state,
+                        },
+                        input.current(),
                 ));
         }
 
@@ -165,6 +167,7 @@ pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
 ) -> pfn_type!(I, I::Token, E)
 where
         I::Token: PartialEq + Clone,
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
         move |input| {
                 filter(
@@ -186,6 +189,7 @@ pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
 ) -> pfn_type!(I, I::Token, E)
 where
         I::Token: PartialEq + Clone,
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
         move |input| {
                 filter(
