@@ -47,7 +47,7 @@ pub trait LabelError<I: InputType, L>: Sized {
 
 /// A trait for AOTT errors. It's done like this so general things that use filter (and similar) would use this onnnne
 pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel> {}
-impl<I: InputType, E: Error<I> + LabelError<I, BuiltinLabel>> Error<I> for E {}
+impl<I: InputType, E: FundamentalError<I> + LabelError<I, BuiltinLabel>> Error<I> for E {}
 
 #[derive(Clone, Debug)]
 pub struct Located<T, E> {
