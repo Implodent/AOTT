@@ -6,7 +6,7 @@ use crate::{
         input::SliceInput,
         iter::IterParser,
         parser::Check,
-        pfn_type,
+        pfn_type, PResult,
 };
 
 use super::*;
@@ -70,15 +70,17 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         Ok(Some(value))
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O> {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, Vec<O>, E>
+        for Repeated<P, O>
+{
+        fn parse_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 let mut state = self.create_state(input)?;
-                while let Some(_) = self.check_next(input, &mut state)? {}
+                while let Some(_) = self.next(input, &mut state)? {}
 
                 Ok(())
         }
 
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 let mut state = self.create_state(input)?;
                 while let Some(_) = self.check_next(input, &mut state)? {}
 
@@ -111,41 +113,39 @@ impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> f
         }
 }
 
-pub struct Slice<'a, I, E, O, P>(P, PhantomData<&'a (I, O, E)>);
+struct Slice<'a, I, E, O, P>(P, PhantomData<&'a (I, O, E)>);
 
-impl<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser<I, O, E>>
-        Parser<I, I::Slice, E> for Slice<'a, I, E, O, P>
+impl<'a, I: SliceInput, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, &'a I::Slice, E>
+        for Slice<'a, I, E, O, P>
 {
         #[inline(always)]
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 self.0.check_with(input)
         }
         #[inline(always)]
-        fn parse_with<'parse>(&self, input: &mut Input<I, E>) -> PResult<I, I::Slice, E> {
+        fn parse_with<'parse>(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 let before = input.offset;
                 self.0.check_with(input)?;
                 Ok(input.input.slice(input.span_since(before)))
         }
 }
 
-pub fn slice<'a, I: InputType + SliceInput<'a>, E: ParserExtras<I>, O, P: Parser<I, O, E>>(
+pub fn slice<'a, I: SliceInput, E: ParserExtras<I>, O, P: Parser<I, O, E>>(
         parser: P,
 ) -> Slice<'a, I, E, O, P> {
         Slice(parser, PhantomData)
 }
 
-#[track_caller]
 pub fn with_slice<
         'parse,
-        'a,
-        I: InputType + SliceInput<'a>,
+        I: SliceInput,
         E: ParserExtras<I>,
         O,
-        F: Fn(&mut Input<'parse, I, E>) -> PResult<I, O, E>,
+        F: Fn(&mut Input<'parse, I, E>) -> PResult<O, E>,
 >(
         input: &mut Input<'parse, I, E>,
         f: F,
-) -> PResult<I, I::Slice, E> {
+) -> PResult<I::Slice, E> {
         let before = input.offset;
         let _ = f(input)?;
         let slice = input.input.slice(input.span_since(before));
@@ -164,18 +164,15 @@ pub enum SeqLabel<Item> {
 /// That works the same with an array, and really, anything that implements `Seq<I::Token>`.
 pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
-) -> pfn_type!(I, I::Token, E)
+) -> impl Parser<I, I::Token, E>
 where
         I::Token: PartialEq + Clone,
         E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
-        move |input| {
-                filter(
-                        |thing| things.contains(thing),
-                        SeqLabel::OneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
-                )
-                .parse_with(input)
-        }
+        filter(
+                |thing| things.contains(thing),
+                SeqLabel::OneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
+        )
 }
 
 /// A parser that accepts any token **except** ones contained in `things`.
@@ -186,18 +183,15 @@ where
 /// ```
 pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
         things: T,
-) -> pfn_type!(I, I::Token, E)
+) -> impl Parser<I, I::Token, E>
 where
         I::Token: PartialEq + Clone,
         E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
-        move |input| {
-                filter(
-                        |thing| !things.contains(thing),
-                        SeqLabel::NoneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
-                )
-                .parse_with(input)
-        }
+        filter(
+                |thing| !things.contains(thing),
+                SeqLabel::NoneOf(things.seq_iter().map(|x| x.borrow().clone()).collect()),
+        )
 }
 
 /// A parser that parser the content, preceded by the `start_delimiter` and terminated by the `end_delimiter`.
@@ -213,14 +207,10 @@ pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
         start_delimiter: impl Parser<I, O2, E>,
         content_parser: impl Parser<I, O, E>,
         end_delimiter: impl Parser<I, O1, E>,
-) -> pfn_type!(I, O, E) {
-        move |input| {
-                start_delimiter.check_with(input)?;
-                let content = content_parser.parse_with(input)?;
-                end_delimiter.check_with(input)?;
-
-                Ok(content)
-        }
+) -> impl Parser<I, O, E> {
+        start_delimiter
+                .ignore_then(content_parser)
+                .then_ignore(end_delimiter)
 }
 
 #[derive(Copy, Clone)]

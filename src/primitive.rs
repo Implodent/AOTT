@@ -5,10 +5,12 @@ use core::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,
-        error::FundamentalError,
+        error::{FundamentalError, LabelWith},
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
-        pfn_type, EmptyPhantom, PResult,
+        pfn_type,
+        prelude::Invert,
+        EmptyPhantom, IResult,
 };
 
 mod choice;
@@ -45,10 +47,10 @@ pub struct Ignored<A, OA>(pub(crate) A, pub(crate) EmptyPhantom<OA>);
 impl<I: InputType, E: ParserExtras<I>, A: Parser<I, OA, E>, OA> Parser<I, (), E>
         for Ignored<A, OA>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> IResult<I, (), E> {
                 self.check_with(input)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> IResult<I, (), E> {
                 self.0.check_with(input)
         }
 }
@@ -122,7 +124,7 @@ pub fn skip_while<I: InputType, E: ParserExtras<I>, F: Fn(&I::Token) -> bool>(
 pub struct Maybe<A>(pub(crate) A);
 
 impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O>, E> for Maybe<A> {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, Option<O>, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<Option<O>, E> {
                 let befunge = input.save();
                 Ok(self.0.parse_with(input).map_or_else(
                         |_| {
@@ -132,10 +134,37 @@ impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O
                         Some,
                 ))
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 let befunge = input.save();
                 self.0.check_with(input)
                         .unwrap_or_else(|_| input.rewind(befunge));
                 Ok(())
         }
 }
+
+#[derive(Copy, Clone)]
+pub struct Not<P>(pub(crate) P);
+
+impl<I: InputType, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, E::Error, E> for Not<P>
+where
+        E::Error: LabelError<I, NotSucceeded>,
+{
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<E::Error, E> {
+                let before = input.offset;
+                self.0.parse_with(input)
+                        .invert(core::convert::identity, |_| {
+                                NotSucceeded.error(input.span_since(before), input.current())
+                        })
+        }
+
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
+                let before = input.offset;
+                self.0.check_with(input)
+                        .invert(core::convert::identity, |()| {
+                                NotSucceeded.error(input.span_since(before), input.current())
+                        })
+        }
+}
+
+/// This is a label, that indicates a parser put in [`Not`], succeeded.
+pub struct NotSucceeded;

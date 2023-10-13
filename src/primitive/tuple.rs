@@ -1,3 +1,5 @@
+use crate::PResult;
+
 use super::*;
 
 /// If `I` is `true`, outputs of `A` and `B` are collected into a tuple of `(a_out, b_out)`.
@@ -12,23 +14,24 @@ pub struct Then<O1, O2, A, B, const I: bool, const AI: bool>(
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, (O1, O2), E> for Then<O1, O2, A, B, true, false>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (O1, O2), E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<(O1, O2), E> {
                 Ok((self.0.parse_with(input)?, self.1.parse_with(input)?))
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.0.check_with(input)?;
                 self.1.check_with(input)
         }
 }
+
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, O1, E> for Then<O1, O2, A, B, false, false>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O1, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O1, E> {
                 let a = self.0.parse_with(input)?;
                 self.1.check_with(input)?;
                 Ok(a)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.0.check_with(input)?;
                 self.1.check_with(input)?;
                 Ok(())
@@ -37,11 +40,11 @@ impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I,
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>
         Parser<I, O2, E> for Then<O1, O2, A, B, false, true>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O2, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O2, E> {
                 self.0.check_with(input)?;
                 self.1.parse_with(input)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.0.check_with(input)?;
                 self.1.check_with(input)
         }
@@ -133,7 +136,7 @@ macro_rules! impl_tuple_for_tuple {
             $($X: Parser<I, $O, E>),*
         {
             #[inline]
-            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<I, ($($O,)*), E> {
+            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<($($O,)*), E> {
                 let ($($X,)*) = self;
 
                 $(
@@ -144,7 +147,7 @@ macro_rules! impl_tuple_for_tuple {
             }
 
             #[inline]
-            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<I, (), E> {
+            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<(), E> {
                 let ($($X,)*) = self;
 
                 $(

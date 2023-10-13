@@ -14,7 +14,7 @@ pub use mode::*;
 pub mod mode {
         use crate::{
                 input::{Input, InputType},
-                PResult,
+                IResult,
         };
 
         use super::{Parser, ParserExtras};
@@ -61,7 +61,7 @@ pub mod mode {
                 fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
                         parser: &P,
                         input: &mut Input<I, E>,
-                ) -> PResult<I, Self::Output<O>, E>;
+                ) -> PResult<(), E>;
         }
 
         /// Emit mode - generates parser output
@@ -114,7 +114,7 @@ pub mod mode {
                 fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
                         parser: &P,
                         input: &mut Input<I, E>,
-                ) -> PResult<I, Self::Output<O>, E> {
+                ) -> PResult<(), E> {
                         parser.parse_with(input)
                 }
         }
@@ -156,7 +156,7 @@ pub mod mode {
                 fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
                         parser: &P,
                         input: &mut Input<I, E>,
-                ) -> PResult<I, Self::Output<O>, E> {
+                ) -> PResult<(), E> {
                         parser.check_with(input)
                 }
         }
@@ -168,7 +168,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Returns an error if the parser failed.
         #[inline(always)]
         #[track_caller]
-        fn parse(&self, input: I) -> PResult<I, O, E>
+        fn parse(&self, input: I) -> PResult<O, E>
         where
                 E: ParserExtras<I, Context = ()>,
         {
@@ -181,7 +181,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Returns an error if the parser failed.
         #[inline(always)]
         #[track_caller]
-        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
+        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<(), E> {
                 let mut input = Input::new_with_context(&input, &context);
                 self.parse_with(&mut input)
         }
@@ -190,12 +190,12 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # Errors
         /// Returns an error if the parser failed.
         #[track_caller]
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E>;
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O, E>;
         /// Runs the parser logic without producing output, thus significantly reducing the number of allocations.
         /// # Errors
         /// Returns an error if the parser failed.
         #[track_caller]
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E>;
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E>;
 
         /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
         /// If you are chaining a lot of [`or`](`Parser::or`) calls, please consider using [`choice`].
@@ -300,7 +300,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         }
         fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
         where
-                I: SliceInput<'a>,
+                I: SliceInput,
                 Self: Sized,
         {
                 slice(self)
@@ -344,20 +344,13 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         }
 }
 
-impl<
-                I: InputType,
-                O,
-                E: ParserExtras<I>,
-                // only input
-                F: Fn(&mut Input<I, E>) -> PResult<I, O, E>,
-        > Parser<I, O, E> for F
+impl<I: InputType, O, E: ParserExtras<I>, F: Fn(&mut Input<I, E>) -> PResult<O, E>> Parser<I, O, E>
+        for F
 {
-        #[track_caller]
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self(input)
         }
-        #[track_caller]
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self(input).map(|_| {})
         }
 }
@@ -392,10 +385,10 @@ where
         I: InputType,
         E: ParserExtras<I>,
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.inner.parse_with(input)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.inner.check_with(input)
         }
 
@@ -408,34 +401,16 @@ where
         }
 }
 
-// MEH ITS A FUCKING FUNCTION GUHHHHH
-
-// impl<I, O, E, T> Parser<I, O, E> for ::alloc::boxed::Box<T>
-// where
-//         I: InputType,
-//         E: ParserExtras<I>,
-//         T: Parser<I, O, E>,
-// {
-//         fn explode<'parse, M: Mode>(&self, inp: Input<I, E>) -> PResult<'parse, I, E, M, O>
-//         where
-//                 Self: Sized,
-//         {
-//                 T::explode::<M>(self, inp)
-//         }
-
-//         explode_extra!(O);
-// }
-
 impl<I, O, E, T> Parser<I, O, E> for ::alloc::rc::Rc<T>
 where
         I: InputType,
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.deref().check_with(input)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O, E> {
                 self.deref().parse_with(input)
         }
 }
@@ -446,10 +421,10 @@ where
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 self.deref().check_with(input)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O, E> {
                 self.deref().parse_with(input)
         }
 }

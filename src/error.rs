@@ -49,6 +49,16 @@ pub trait LabelError<I: InputType, L>: Sized {
 pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel> {}
 impl<I: InputType, E: FundamentalError<I> + LabelError<I, BuiltinLabel>> Error<I> for E {}
 
+pub trait LabelWith<I: InputType, E: LabelError<I, Self>> {
+        fn error(self, span: Range<usize>, last_token: Option<I::Token>) -> E;
+}
+
+impl<I: InputType, L, E: LabelError<I, L>> LabelWith<I, E> for L {
+        fn error(self, span: Range<usize>, last_token: Option<<I as InputType>::Token>) -> E {
+                E::from_label(span, self, last_token)
+        }
+}
+
 #[derive(Clone, Debug)]
 pub struct Located<T, E> {
         pub pos: T,
@@ -62,8 +72,34 @@ impl<T, E> Located<T, E> {
         }
 }
 
-pub type PResult<I, O, E = crate::extra::Err<I>> = Result<O, <E as ParserExtras<I>>::Error>;
+pub type PResult<O, E = crate::extra::Err<I>> =
+        core::result::Result<O, <E as ParserExtras<I>>::Error>;
 
 /// Implement `LabelError<I, Filtering>` to use `filter*` with your error.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Filtering(pub Cow<'static, str>);
+
+pub trait Invert<T, E> {
+        type This<T_, E_>;
+
+        fn invert(
+                self,
+                err_to_ok: impl FnOnce(E) -> T,
+                ok_to_err: impl FnOnce(T) -> E,
+        ) -> Self::This<E, T>;
+}
+
+impl<T, E> Invert<T, E> for Result<T, E> {
+        type This<T_, E_> = Result<T_, E_>;
+
+        fn invert(
+                self,
+                err_to_ok: impl FnOnce(E) -> T,
+                ok_to_err: impl FnOnce(T) -> E,
+        ) -> Self::This<E, T> {
+                match self {
+                        Ok(ok) => Err(ok_to_err(ok)),
+                        Err(err) => Ok(err_to_ok(err)),
+                }
+        }
+}

@@ -104,10 +104,9 @@ fn parser_impl(args: TokenStream, ts: TokenStream) -> Result<TokenStream, syn::E
                                                         .parse2(quote!(::aott::extra::Err<#ty>))
                                                         .unwrap()
                                         });
-                                let ty_for_ret = ty.clone();
                                 let extras_for_ret = extras.clone();
                                 let output = f.sig.output;
-                                f.sig.output = ReturnType::Type(Default::default(), Box::new(Type::Path(TypePath { qself: None, path: Path {leading_colon: None, segments: [PathSegment { ident: Ident::new("aott", Span::call_site()), arguments: PathArguments::None }, PathSegment {ident: Ident::new("PResult", Span::call_site()), arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments { colon2_token: None, gt_token: Default::default(), lt_token: Default::default(), args: Punctuated::from_iter([GenericArgument::Type(ty_for_ret), GenericArgument::Type(match output { ReturnType::Default => Type::Tuple(syn::TypeTuple { paren_token: Default::default(), elems: Punctuated::new() }), ReturnType::Type(_, t) => map_ty(lifetime, *t) }), GenericArgument::Type(extras_for_ret)]) })}].into_iter().collect()} })));
+                                f.sig.output = ReturnType::Type(Default::default(), Box::new(Type::Path(TypePath { qself: None, path: Path {leading_colon: None, segments: [PathSegment { ident: Ident::new("aott", Span::call_site()), arguments: PathArguments::None }, PathSegment {ident: Ident::new("PResult", Span::call_site()), arguments: PathArguments::AngleBracketed(AngleBracketedGenericArguments { colon2_token: None, gt_token: Default::default(), lt_token: Default::default(), args: Punctuated::from_iter([GenericArgument::Type(match output { ReturnType::Default => Type::Tuple(syn::TypeTuple { paren_token: Default::default(), elems: Punctuated::new() }), ReturnType::Type(_, t) => map_ty(lifetime, *t) }), GenericArgument::Type(extras_for_ret)]) })}].into_iter().collect()} })));
 
                                 pat.ty = Box::new(Type::Reference(TypeReference {
                                         elem: Box::new(Type::Path(TypePath {

@@ -3,13 +3,13 @@ use core::{borrow::Borrow, marker::PhantomData};
 use crate::{
         container::OrderedSeq,
         derive::parser,
-        error::{FundamentalError, LabelError},
+        error::{FundamentalError, LabelError, LabelWith},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
         pfn_type,
         prelude::Parser,
         primitive::*,
-        PResult,
+        PResult, Result,
 };
 
 mod private {
@@ -48,7 +48,7 @@ pub trait Char: Sized + Clone + Copy + PartialEq + core::fmt::Debug + Sealed + '
         /// The default unsized [`str`]-like type of a linear sequence of this character.
         ///
         /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + core::fmt::Debug + 'static;
+        type Str: ?Sized + AsRef<[u8]> + core::fmt::Debug + 'static;
         type Owned: 'static + AsRef<Self::Str> + Clone + PartialEq + Eq + core::fmt::Debug;
 
         /// Convert the given ASCII character to this character type.
@@ -188,9 +188,7 @@ pub mod ascii {
         /// assert_eq!(ident::<_, _, extra::Err<_>>.parse("catch"), Ok("catch"));
         /// ```
         #[parser(extras = E)]
-        pub fn ident<'c, I: StrInput<'c, C> + 'c, C: Char, E: ParserExtras<I> + 'c>(
-                inp: I,
-        ) -> &'c C::Str
+        pub fn ident<I: StrInput<C>, C: Char, E: ParserExtras<I>>(inp: I) -> &C::Str
         where
                 E::Error: LabelError<I, CharLabel<C>>,
         {
@@ -209,18 +207,14 @@ pub mod ascii {
                 Ok(inp.input.slice(inp.span_since(before)))
         }
 
+        /// Parses the specified keyword.
+        ///
         /// # Panics
         /// This function panics (only in debug mode) if the `keyword` is an invalid ASCII identifier.
         #[track_caller]
-        pub fn keyword<
-                'a,
-                'b: 'a,
-                C: Char + core::fmt::Debug + 'a,
-                I: InputType + StrInput<'a, C> + 'a,
-                E: ParserExtras<I> + 'a,
-        >(
-                keyword: &'b C::Str,
-        ) -> impl Fn(&mut Input<I, E>) -> PResult<I, &'a C::Str, E>
+        pub fn keyword<C: Char + core::fmt::Debug, I: StrInput<C>, E: ParserExtras<I>>(
+                keyword: &C::Str,
+        ) -> impl Fn(&mut Input<I, E>) -> Result<&'_ C::Str, E>
         where
                 C::Str: PartialEq,
                 E::Error: LabelError<I, CharLabel<C>>,
@@ -338,7 +332,7 @@ where
 /// Parses a sequence of characters, ignoring the character's case.
 pub fn just_ignore_case<
         'a,
-        I: InputType + StrInput<'a, C>,
+        I: StrInput<C>,
         C: Char + PartialEq + Clone,
         E: ParserExtras<I>,
         T: OrderedSeq<'a, I::Token> + Clone,
@@ -398,9 +392,7 @@ pub mod unicode {
         /// assert_eq!(ident.parse("fn"), Ok("fn"));
         /// ```
         #[parser(extras = E)]
-        pub fn ident<'a, I: InputType + StrInput<'a, C> + 'a, C: Char, E: ParserExtras<I> + 'a>(
-                input: I,
-        ) -> &'a C::Str
+        pub fn ident<I: StrInput<C>, C: Char, E: ParserExtras<I>>(input: I) -> &'_ C::Str
         where
                 E::Error: LabelError<I, CharLabel<C>>,
         {
@@ -436,15 +428,9 @@ pub mod unicode {
         /// assert!(def.parse("define").is_err());
         /// ```
         #[track_caller]
-        pub fn keyword<
-                'a,
-                'b: 'a,
-                I: InputType + StrInput<'a, C> + 'a,
-                C: Char,
-                E: ParserExtras<I> + 'a,
-        >(
-                keyword: &'b C::Str,
-        ) -> pfn_type!(I, &'a C::Str, E)
+        pub fn keyword<I: StrInput<C>, C: Char, E: ParserExtras<I>>(
+                keyword: &C::Str,
+        ) -> pfn_type!(I, &'_ C::Str, E)
         where
                 C::Str: PartialEq + Display,
                 E::Error: LabelError<I, CharLabel<C>>,
@@ -522,10 +508,8 @@ where
 /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
 /// when `I` is [`&[u8]`]).
 ///
-/// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
-pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
-        radix: u32,
-) -> pfn_type!(I, &'a C::Str, E)
+/// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10` (decimal).
+pub fn int<I: StrInput<C>, C: Char, E: ParserExtras<I>>(radix: u32) -> pfn_type!(I, &C::Str, E)
 where
         E::Error: LabelError<I, CharLabel<C>>,
 {
@@ -534,11 +518,8 @@ where
                         let cr = input.next()?;
                         let befunge = input.offset;
                         if !(cr.is_digit(radix) && cr != C::digit_zero()) {
-                                return Err(LabelError::from_label(
-                                        input.span_since(befunge),
-                                        CharLabel::ExpectedDigit(radix),
-                                        Some(cr),
-                                ));
+                                return Err(CharLabel::ExpectedDigit(radix)
+                                        .error(input.span_since(befunge), Some(cr)));
                         }
                         filter(
                                 move |cr: &C| cr.is_digit(radix),
@@ -556,36 +537,23 @@ where
 pub struct Padded<A, C>(A, PhantomData<C>);
 
 /// A parser that accepts and ignores any number of whitespace characters before or after another parser.
-pub fn padded<
-        'a,
-        I: InputType + StrInput<'a, C>,
-        E: ParserExtras<I>,
-        C: Char,
-        O,
-        A: Parser<I, O, E>,
->(
+pub fn padded<I: StrInput<C>, E: ParserExtras<I>, C: Char, O, A: Parser<I, O, E>>(
         parser: A,
 ) -> Padded<A, C> {
         Padded(parser, PhantomData)
 }
 
-impl<
-                'a,
-                I: InputType + StrInput<'a, C>,
-                E: ParserExtras<I>,
-                C: Char,
-                O,
-                A: Parser<I, O, E>,
-        > Parser<I, O, E> for Padded<A, C>
+impl<I: StrInput<C>, E: ParserExtras<I>, C: Char, O, A: Parser<I, O, E>> Parser<I, O, E>
+        for Padded<A, C>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O, E> {
                 let sw = skip_while(Char::is_whitespace);
                 sw(input)?;
                 let output = self.0.parse_with(input)?;
                 sw(input)?;
                 Ok(output)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 let sw = skip_while(Char::is_whitespace);
                 sw(input)?;
                 self.0.check_with(input)?;
@@ -609,7 +577,7 @@ impl<
 /// // ...including none at all!
 /// assert_eq!(whitespace.parse(""), Ok(()));
 /// ```
-pub fn whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
+pub fn whitespace<C: Char, I: StrInput<C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, ()>
 where
         E::Error: LabelError<I, CharLabel<C>>,
@@ -638,7 +606,7 @@ where
 /// // ... but not newlines
 /// assert!(inline_whitespace.at_least(1).parse("\n\r").is_err());
 /// ```
-pub fn inline_whitespace<'a, C: Char, I: InputType + StrInput<'a, C>, E: ParserExtras<I>>(
+pub fn inline_whitespace<C: Char, I: StrInput<C>, E: ParserExtras<I>>(
 ) -> Repeated<impl Parser<I, (), E>, ()>
 where
         E::Error: LabelError<I, CharLabel<C>>,

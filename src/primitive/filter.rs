@@ -3,10 +3,10 @@ use core::marker::PhantomData;
 use alloc::borrow::Cow;
 
 use crate::{
-        error::{Filtering, LabelError},
+        error::{Filtering, LabelError, LabelWith},
         input::{Input, InputType},
         parser::*,
-        pfn_type, PResult,
+        pfn_type, IResult, PResult,
 };
 
 fn filter_impl<
@@ -21,7 +21,7 @@ fn filter_impl<
         _mode: &M,
         this: &FilterParser<A, F, O, L>,
         input: &mut Input<I, E>,
-) -> PResult<I, M::Output<O>, E>
+) -> PResult<M::Output<O>, E>
 where
         E::Error: LabelError<I, L>,
 {
@@ -52,11 +52,11 @@ impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool,
 where
         E::Error: LabelError<I, L>,
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<O, E> {
                 filter_impl(&Check, self, input)
         }
 
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 filter_impl(&Emit, self, input)
         }
 }
@@ -64,7 +64,7 @@ where
 pub fn filter<I: InputType, E: ParserExtras<I>, L: Clone>(
         filter: impl Fn(&I::Token) -> bool,
         label: L,
-) -> impl Fn(&mut Input<I, E>) -> PResult<I, I::Token, E>
+) -> impl Fn(&mut Input<I, E>) -> PResult<I::Token, E>
 where
         E::Error: LabelError<I, L>,
 {
@@ -72,11 +72,7 @@ where
                 let befunge = input.offset;
                 match input.next_or_none() {
                         Some(el) if filter(&el) => Ok(el),
-                        other => Err(LabelError::from_label(
-                                input.span_since(befunge),
-                                label.clone(),
-                                other,
-                        )),
+                        other => Err(label.clone().error(input.span_since(befunge), other)),
                 }
         }
 }
@@ -115,13 +111,13 @@ macro_rules! select {
 
 pub struct Rewind<A>(A);
 impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>> Parser<I, O, E> for Rewind<A> {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 let befunge = input.save();
                 let output = self.0.check_with(input)?;
                 input.rewind(befunge);
                 Ok(output)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+        fn parse_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
                 let befunge = input.save();
                 let output = self.0.parse_with(input)?;
                 input.rewind(befunge);

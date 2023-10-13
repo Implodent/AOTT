@@ -4,6 +4,7 @@ use crate::{
         input::{Input, InputType},
         parser::{Check, Emit, Mode, ParserExtras},
         prelude::Parser,
+        PResult,
 };
 
 pub trait IterParser<I: InputType, E: ParserExtras<I>> {
@@ -38,29 +39,29 @@ pub struct Collect<P, B>(P, PhantomData<B>);
 impl<I: InputType, P: IterParser<I, E>, B: FromIterator<P::Item>, E: ParserExtras<I>>
         Parser<I, B, E> for Collect<P, B>
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> crate::PResult<I, B, E> {
-                Ok(IterParse {
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<B, E> {
+                Iterate::<_, _, _, _, true> {
                         parser: &self.0,
                         input,
                         state: None,
                         mode: PhantomData::<Emit>,
                 }
-                .collect())
+                .collect::<PResult<P::Item, E>>()
         }
 
-        fn check_with(&self, input: &mut Input<I, E>) -> crate::PResult<I, (), E> {
-                Ok(IterParse {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
+                Iterate::<_, _, _, _, true> {
                         parser: &self.0,
                         input,
                         state: None,
                         mode: PhantomData::<Check>,
                 }
-                .collect())
+                .collect::<PResult<(), E>>()
         }
 }
 
 #[doc(hidden)]
-pub struct IterParse<
+pub struct Iterate<
         'a,
         'input,
         'parse,
@@ -68,6 +69,7 @@ pub struct IterParse<
         E: ParserExtras<I>,
         P: IterParser<I, E>,
         M: Mode,
+        const IsResult: bool = false,
 > {
         pub parser: &'a P,
         pub input: &'input mut Input<'parse, I, E>,
@@ -76,7 +78,7 @@ pub struct IterParse<
 }
 
 impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> Iterator
-        for IterParse<'a, 'input, 'parse, I, E, P, Emit>
+        for Iterate<'a, 'input, 'parse, I, E, P, Emit, false>
 {
         type Item = P::Item;
 
@@ -93,7 +95,7 @@ impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> 
 }
 
 impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> Iterator
-        for IterParse<'a, 'input, 'parse, I, E, P, Check>
+        for Iterate<'a, 'input, 'parse, I, E, P, Check, false>
 {
         type Item = ();
 
@@ -106,5 +108,47 @@ impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> 
                 };
 
                 self.parser.check_next(self.input, state).ok().flatten()
+        }
+}
+
+impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> Iterator
+        for Iterate<'a, 'input, 'parse, I, E, P, Emit, true>
+{
+        type Item = PResult<P::Item, E>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+                let state = if let Some(state) = self.state.as_mut() {
+                        state
+                } else {
+                        self.state
+                                .insert(self.parser.create_state(self.input).ok()?)
+                };
+
+                match self.parser.next(self.input, state) {
+                        Ok(Some(yes)) => Some(Ok(yes)),
+                        Ok(None) => None,
+                        Err(e) => Some(Err(e)),
+                }
+        }
+}
+
+impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> Iterator
+        for Iterate<'a, 'input, 'parse, I, E, P, Check, true>
+{
+        type Item = PResult<(), E>;
+
+        fn next(&mut self) -> Option<Self::Item> {
+                let state = if let Some(state) = self.state.as_mut() {
+                        state
+                } else {
+                        self.state
+                                .insert(self.parser.create_state(self.input).ok()?)
+                };
+
+                match self.parser.check_next(self.input, state) {
+                        Ok(Some(yes)) => Some(Ok(yes)),
+                        Ok(None) => None,
+                        Err(e) => Some(Err(e)),
+                }
         }
 }

@@ -47,7 +47,7 @@ pub mod prelude {
         #[cfg(feature = "builtin-bytes")]
         pub use crate::bytes;
         pub use crate::derive::parser;
-        pub use crate::error::{Error, PResult};
+        pub use crate::error::{Error, Invert, PResult};
         pub use crate::extra;
         pub use crate::input::{
                 ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
@@ -85,7 +85,7 @@ pub mod prelude {
 #[macro_export]
 macro_rules! pfn_type {
         ($input:ty, $output:ty, $extras:ty) => {
-                impl Fn(&mut $crate::input::Input<$input, $extras>) -> $crate::PResult<$input, $output, $extras>
+                impl Fn(&mut $crate::input::Input<$input, $extras>) -> $crate::PResult<$output, $extras>
         };
 }
 

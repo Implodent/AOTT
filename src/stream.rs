@@ -9,11 +9,13 @@ use crate::input::{ExactSizeInput, InputType};
 pub struct Stream<I: Iterator> {
         tokens: Cell<(Vec<I::Item>, Option<I>)>,
 }
+
 impl<I: Iterator> Debug for Stream<I> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, "")
         }
 }
+
 impl<I: Iterator> Stream<I> {
         /// Create a new stream from an [`Iterator`].
         ///
@@ -68,7 +70,7 @@ where
         I::Item: Clone + core::fmt::Debug,
 {
         type Token = I::Item;
-        type OwnedMut = I;
+        type Owned = I;
 
         #[inline(always)]
         fn start(&self) -> usize {
@@ -77,7 +79,7 @@ where
 
         #[inline(always)]
         fn prev(offset: usize) -> usize {
-                offset - 1
+                offset.saturating_sub(1)
         }
 
         #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]
@@ -99,6 +101,10 @@ where
                 self.tokens.swap(&other);
 
                 (offset + usize::from(tok.is_some()), tok)
+        }
+
+        fn has_tokens_left(&self, _offset: usize) -> Option<bool> {
+                None
         }
 }
 

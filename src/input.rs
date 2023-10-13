@@ -11,9 +11,9 @@ use core::ops::{Range, RangeFrom};
 pub trait InputType {
         type Token;
 
-        /// The owned type containing Self that allows mutation
+        /// The owned type containing Self
         #[doc(hidden)]
-        type OwnedMut;
+        type Owned: AsRef<Self>;
 
         #[doc(hidden)]
         fn start(&self) -> usize;
@@ -27,12 +27,14 @@ pub trait InputType {
 
         #[doc(hidden)]
         fn prev(offset: usize) -> usize;
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool>;
 }
 
-impl<'a> InputType for &'a str {
+impl InputType for str {
         type Token = char;
 
-        type OwnedMut = String;
+        type Owned = String;
 
         #[inline]
         fn start(&self) -> usize {
@@ -59,16 +61,20 @@ impl<'a> InputType for &'a str {
                         (offset, None)
                 }
         }
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool> {
+                Some(offset < self.len())
+        }
 }
 
-impl<'a, T: Clone> InputType for &'a [T] {
+impl<T: Clone> InputType for [T] {
         type Token = T;
-        type OwnedMut = Vec<T>;
+        type Owned = Vec<T>;
 
         unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
                 if offset < self.len() {
                         // SAFETY: `offset < self.len()` above guarantees offset is in-bounds
-                        //         We only ever return offsets that are at a character boundary
+                        //         We only ever return offsets that are a valid index to this array.
                         let tok = unsafe { self.get_unchecked(offset) };
                         (offset + 1, Some(tok.clone()))
                 } else {
@@ -82,6 +88,10 @@ impl<'a, T: Clone> InputType for &'a [T] {
 
         fn prev(offset: usize) -> usize {
                 offset.saturating_sub(1)
+        }
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool> {
+                Some(offset < self.len())
         }
 }
 
@@ -108,6 +118,10 @@ impl InputType for ::bytes::Bytes {
         fn prev(offset: usize) -> usize {
                 offset.saturating_sub(1)
         }
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool> {
+                Some(offset < self.len())
+        }
 }
 
 #[doc(hidden)]
@@ -132,20 +146,20 @@ impl<T, E> Default for Errors<T, E> {
 }
 
 pub struct InputOwned<I: InputType, E: ParserExtras<I> = extra::Err<I>> {
-        pub(crate) input: I,
+        pub(crate) input: I::Owned,
         pub(crate) cx: E::Context,
         errors: Errors<usize, E::Error>,
 }
 
 impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
-        pub fn from_input_with_context(input: I, context: E::Context) -> Self {
+        pub fn from_input_with_context(input: I::Owned, context: E::Context) -> Self {
                 Self {
                         input,
                         cx: context,
                         errors: Errors::default(),
                 }
         }
-        pub fn from_input(input: I) -> Self
+        pub fn from_input(input: I::Owned) -> Self
         where
                 E::Context: Default,
         {
@@ -157,15 +171,15 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
         }
         pub fn as_ref_at_zero(&mut self) -> Input<'_, I, E> {
                 Input {
-                        offset: self.input.start(),
-                        input: &self.input,
+                        offset: self.input.as_ref().start(),
+                        input: self.input.as_ref(),
                         cx: &self.cx,
                 }
         }
         pub fn as_ref_at(&mut self, offset: usize) -> Input<'_, I, E> {
                 Input {
                         offset,
-                        input: &self.input,
+                        input: self.input.as_ref(),
                         cx: &self.cx,
                 }
         }
@@ -197,9 +211,14 @@ impl<'parse, I: InputType, E: ParserExtras<I, Context = ()>> Input<'parse, I, E>
                         cx: &(),
                 }
         }
+
+        pub fn new_owned(input: &'parse I::Owned) -> Self {
+                Self::new(input.as_ref())
+        }
 }
 
 impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
+        /// Creates a new [`Input`] from a reference to `I` with the specified context.
         pub fn new_with_context(input: &'parse I, cx: &'parse E::Context) -> Self {
                 Self {
                         offset: input.start(),
@@ -207,12 +226,18 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                         cx,
                 }
         }
+
+        /// Creates a new [`Input`] from a reference to the owned container for `I` (`I::Owned`) with the specified context.
+        pub fn new_owned_with_context(input: &'parse I::Owned, cx: &'parse E::Context) -> Self {
+                Self::new_with_context(input.as_ref(), cx)
+        }
+
         /// Returns the context of the input.
         pub fn context(&self) -> &'parse E::Context {
                 self.cx
         }
 
-        #[inline]
+        #[inline(always)]
         pub(crate) fn skip_while(&mut self, f: &impl Fn(&I::Token) -> bool) {
                 loop {
                         // SAFETY: offset was generated by previous call to `Input::next`
@@ -232,13 +257,19 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 (offset, token)
         }
 
+        /// Invokes the provided `parser` on this input, returning the output or the error.
         pub fn parse<O, P: Parser<I, O, E> + ?Sized>(&mut self, parser: &P) -> Result<O, E::Error> {
                 parser.parse_with(self)
         }
 
-        pub fn check<O, P: Parser<I, O, E>>(&mut self, parser: &P) -> Result<(), E::Error> {
+        /// Invokes the provided `parser` on this input, without generating an output, returning either success or the error.
+        pub fn check<O, P: Parser<I, O, E> + ?Sized>(
+                &mut self,
+                parser: &P,
+        ) -> Result<(), E::Error> {
                 parser.check_with(self)
         }
+
         /// Save the current parse state as a [`Marker`].
         ///
         /// You can rewind back to this state later with [`Self::rewind`].
@@ -253,18 +284,19 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         /// Reset the parse state to that represented by the given [`Marker`].
         ///
         /// You can create a marker with which to perform rewinding using [`Self::save`].
-        /// Using a marker from another input is UB. Your parser may explode. You may get a panic.
+        /// Using a marker from another input is UB. Your parser may explode. You may get a panic. Anything could happen, really.
         #[inline(always)]
         pub fn rewind(&mut self, marker: Marker) {
                 // self.errors.secondary.truncate(marker.err_count);
                 self.offset = marker.offset;
         }
 
-        /// Get the next token in the input by value. Returns `None` if the end of the input has been reached.
+        /// Get the next token in the input by value. Returns [`None`] if the end of the input has been reached.
         #[inline(always)]
         pub fn next_or_none(&mut self) -> Option<I::Token> {
                 self.next_inner().1
         }
+
         /// Peek the next token in the input. Returns `Err(UnexpectedEOF)` if the end of the input has been reached.
         #[inline(always)]
         pub fn peek(&self) -> Result<I::Token, E::Error> {
@@ -273,16 +305,20 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 unsafe { self.input.next(self.offset).1 }
                         .ok_or_else(|| Error::unexpected_eof(self.span_since(befunge), None))
         }
+
         #[inline(always)]
         pub fn span_since(&self, before: usize) -> Range<usize> {
                 before..self.offset
         }
+
         #[inline(always)]
         pub fn next(&mut self) -> Result<I::Token, E::Error> {
                 let befunge = self.offset;
+
                 self.next_or_none()
                         .ok_or_else(|| Error::unexpected_eof(self.span_since(befunge), None))
         }
+
         pub fn skip(&mut self) -> Result<(), E::Error> {
                 let befunge = self.offset;
                 match unsafe { self.input.next(befunge) } {
@@ -293,35 +329,39 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                         (_, None) => Err(Error::unexpected_eof(self.span_since(befunge), None)),
                 }
         }
+
         #[inline(always)]
         pub fn current(&self) -> Option<I::Token> {
                 unsafe { self.input.next(I::prev(self.offset)) }.1
         }
 
         #[inline(always)]
-        pub fn slice(&self, range: Range<usize>) -> I::Slice
+        pub fn slice(&self, range: Range<usize>) -> &'parse I::Slice
         where
-                I: SliceInput<'parse>,
+                I: SliceInput,
         {
                 self.input.slice(range)
         }
 
+        /// Returns the full slice of the input.
         #[inline(always)]
-        pub fn full_slice(&self) -> I::Slice
+        pub fn full_slice(&self) -> &'parse I::Slice
         where
-                I: SliceInput<'parse>,
+                I: SliceInput,
         {
                 self.input.full_slice()
         }
 
+        /// Returns a slice of the input after the offset `offset`.
         #[inline(always)]
-        pub fn slice_since(&self, before: usize) -> I::Slice
+        pub fn slice_since(&self, offset: usize) -> &'parse I::Slice
         where
-                I: SliceInput<'parse>,
+                I: SliceInput,
         {
-                self.input.slice(self.span_since(before))
+                self.input.slice(self.span_since(offset))
         }
 
+        /// Returns a new Input with the context set to the one you provided (`cx`). You may need to specify the ParserExtras parameter manually.
         #[inline(always)]
         pub fn with_context<E2: ParserExtras<I>>(
                 &self,
@@ -334,6 +374,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 }
         }
 
+        /// Returns a new Input with the context now being `()`. You may need to specify the ParserExtras parameter manually.
         #[inline(always)]
         pub fn no_context<E2: ParserExtras<I, Context = ()>>(&self) -> Input<'parse, I, E2> {
                 Input {
@@ -341,6 +382,14 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                         cx: &(),
                         offset: self.offset,
                 }
+        }
+
+        /// Call this method to see if there are any tokens left.
+        #[inline(always)]
+        pub fn has_tokens_left(&self) -> bool {
+                self.input
+                        .has_tokens_left(self.offset)
+                        .unwrap_or_else(|| unsafe { self.input.next(self.offset) }.1.is_some())
         }
 }
 
@@ -351,82 +400,130 @@ pub struct Marker {
 }
 
 /// Implemented by inputs that represent slice-like streams of input tokens.
-pub trait SliceInput<'a>: ExactSizeInput {
-        /// The unsized slice type of this input. For [`&str`] it's `&'a str`, and for [`&[T]`] it will be `&'a [T]`.
-        type Slice: 'a;
+pub trait SliceInput: ExactSizeInput {
+        /// The unsized slice type of this input. For [`str`] it's `str`, and for [`[T]`] it will be `[T]`.
+        type Slice;
 
         /// Get the full slice of the input
         #[doc(hidden)]
-        fn full_slice(&self) -> Self::Slice;
+        fn full_slice(&self) -> &'_ Self::Slice;
 
         /// Get a slice from a start and end offset
         // TODO: Make unsafe
         #[doc(hidden)]
-        fn slice(&self, range: Range<usize>) -> Self::Slice;
+        fn slice(&self, range: Range<usize>) -> &'_ Self::Slice;
 
         /// Get a slice from a start offset till the end of the input
         // TODO: Make unsafe
         #[doc(hidden)]
-        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice;
+        fn slice_from(&self, from: RangeFrom<usize>) -> &'_ Self::Slice;
 }
 
-pub trait StrInput<'a, C: Char>: InputType<Token = C> + SliceInput<'a, Slice = &'a C::Str> {}
-impl<'a> ExactSizeInput for &'a str {
+pub trait StrInput<C: Char>: InputType<Token = C> + SliceInput<Slice = C::Str> {}
+
+impl ExactSizeInput for str {
         #[inline(always)]
         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
                 range.start..self.len()
         }
 }
-impl<'a, T: Clone> ExactSizeInput for &'a [T] {
+
+impl<T: Clone> ExactSizeInput for [T] {
         #[inline(always)]
         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
                 range.start..self.len()
         }
 }
-// impl<'a, T: Clone + 'a, const N: usize> ExactSizeInput for &'a [T; N] {
-//         #[inline(always)]
-//         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
-//                 (range.start..N).into()
-//         }
-// }
-impl<'a> StrInput<'a, char> for &'a str {}
 
-impl<'a> SliceInput<'a> for &'a str {
-        type Slice = &'a str;
+impl<T: Clone, const N: usize> InputType for [T; N] {
+        type Token = T;
+        type Owned = Self;
+
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
+                (
+                        offset + usize::from(offset < self.len()),
+                        self.get(offset).cloned(),
+                )
+        }
+
+        fn prev(offset: usize) -> usize {
+                offset.saturating_sub(1)
+        }
+
+        fn start(&self) -> usize {
+                0
+        }
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool> {
+                Some(offset < N)
+        }
+}
+
+impl<T: Clone, const N: usize> ExactSizeInput for [T; N] {
+        #[inline(always)]
+        unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {
+                range.start..N
+        }
+}
+impl StrInput<char> for str {}
+
+impl SliceInput for str {
+        type Slice = str;
 
         #[inline(always)]
-        fn full_slice(&self) -> Self::Slice {
-                *self
+        fn full_slice(&self) -> &'_ Self::Slice {
+                self
         }
 
         #[inline(always)]
-        fn slice(&self, range: Range<usize>) -> Self::Slice {
+        fn slice(&self, range: Range<usize>) -> &'_ Self::Slice {
                 &self[range]
         }
 
         #[inline(always)]
-        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice {
+        fn slice_from(&self, from: RangeFrom<usize>) -> &'_ Self::Slice {
                 &self[from]
         }
 }
 
-impl<'a> StrInput<'a, u8> for &'a [u8] {}
+impl StrInput<u8> for [u8] {}
 
-impl<'a, T: Clone> SliceInput<'a> for &'a [T] {
-        type Slice = &'a [T];
+impl<T: Clone> SliceInput for [T] {
+        type Slice = [T];
 
         #[inline(always)]
-        fn full_slice(&self) -> Self::Slice {
-                *self
+        fn full_slice(&self) -> &'_ Self::Slice {
+                self
         }
 
         #[inline(always)]
-        fn slice(&self, range: Range<usize>) -> Self::Slice {
+        fn slice(&self, range: Range<usize>) -> &'_ Self::Slice {
                 &self[range]
         }
 
         #[inline(always)]
-        fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice {
+        fn slice_from(&self, from: RangeFrom<usize>) -> &'_ Self::Slice {
                 &self[from]
+        }
+}
+
+impl<'a, I: InputType> InputType for &'a I {
+        type Token = I::Token;
+        type Owned = I::Owned;
+
+        fn prev(offset: usize) -> usize {
+                I::prev(offset)
+        }
+
+        unsafe fn next(&self, offset: usize) -> (usize, Option<Self::Token>) {
+                (*self).next(offset)
+        }
+
+        fn has_tokens_left(&self, offset: usize) -> Option<bool> {
+                (*self).has_tokens_left(offset)
+        }
+
+        fn start(&self) -> usize {
+                (*self).start()
         }
 }
