@@ -17,9 +17,10 @@ fn filter_impl<
         F: Fn(&O) -> bool,
         M: Mode,
         L: Clone,
+        LF: Fn(O) -> L,
 >(
         _mode: &M,
-        this: &FilterParser<A, F, O, L>,
+        this: &FilterParser<A, F, O, L, LF>,
         input: &mut Input<I, E>,
 ) -> PResult<I, M::Output<O>, E>
 where
@@ -32,7 +33,7 @@ where
                 } else {
                         let err = LabelError::from_label(
                                 input.span_since(offset),
-                                this.2.clone(),
+                                this.2(thing),
                                 input.current(),
                         );
                         Err(err)
@@ -40,15 +41,17 @@ where
         })
 }
 
-pub struct FilterParser<A, F, O, L>(
-        pub(crate) A,
-        pub(crate) F,
-        pub(crate) L,
-        pub(crate) PhantomData<O>,
-);
+pub struct FilterParser<A, F, O, L, LF: Fn(O) -> L>(pub(crate) A, pub(crate) F, pub(crate) LF);
 
-impl<I: InputType, O, E: ParserExtras<I>, A: Parser<I, O, E>, F: Fn(&O) -> bool, L: Clone>
-        Parser<I, O, E> for FilterParser<A, F, O, L>
+impl<
+                I: InputType,
+                O,
+                E: ParserExtras<I>,
+                A: Parser<I, O, E>,
+                F: Fn(&O) -> bool,
+                L: Clone,
+                LF: Fn(O) -> L,
+        > Parser<I, O, E> for FilterParser<A, F, O, L, LF>
 where
         E::Error: LabelError<I, L>,
 {
