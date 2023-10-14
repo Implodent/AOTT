@@ -115,22 +115,23 @@ impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> f
 
 struct Slice<'a, I, E, O, P>(P, PhantomData<&'a (I, O, E)>);
 
-impl<'a, I: SliceInput, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, &'a I::Slice, E>
+impl<'a, I: SliceInput + 'a, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, &'a I::Slice, E>
         for Slice<'a, I, E, O, P>
 {
         #[inline(always)]
-        fn check_with(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<&'a I::Slice, E> {
                 self.0.check_with(input)
         }
+
         #[inline(always)]
-        fn parse_with<'parse>(&self, input: &mut Input<I, E>) -> $1PResult<$2, E> {
+        fn parse_with<'parse>(&self, input: &mut Input<I, E>) -> PResult<&'a I::Slice, E> {
                 let before = input.offset;
                 self.0.check_with(input)?;
                 Ok(input.input.slice(input.span_since(before)))
         }
 }
 
-pub fn slice<'a, I: SliceInput, E: ParserExtras<I>, O, P: Parser<I, O, E>>(
+pub fn slice<'a, I: SliceInput + 'a, E: ParserExtras<I>, O, P: Parser<I, O, E>>(
         parser: P,
 ) -> Slice<'a, I, E, O, P> {
         Slice(parser, PhantomData)
@@ -145,7 +146,7 @@ pub fn with_slice<
 >(
         input: &mut Input<'parse, I, E>,
         f: F,
-) -> PResult<I::Slice, E> {
+) -> PResult<&'parse I::Slice, E> {
         let before = input.offset;
         let _ = f(input)?;
         let slice = input.input.slice(input.span_since(before));
@@ -162,9 +163,9 @@ pub enum SeqLabel<Item> {
 /// For example, you could pass a `&str` as `things`, and it would result in a parser,
 /// that would match any character that `things` contains.
 /// That works the same with an array, and really, anything that implements `Seq<I::Token>`.
-pub fn one_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
+pub fn one_of<'a, I: InputType + 'a, E: ParserExtras<I> + 'a, T: Seq<'a, I::Token> + 'a>(
         things: T,
-) -> impl Parser<I, I::Token, E>
+) -> impl Parser<I, I::Token, E> + 'a
 where
         I::Token: PartialEq + Clone,
         E::Error: LabelError<I, SeqLabel<I::Token>>,
@@ -181,9 +182,9 @@ where
 /// let parser = none_of::<&str, extra::Err<_>, _>("bcd");
 /// assert_eq!(parser.parse("abcd"), Ok('a'));
 /// ```
-pub fn none_of<'a, I: InputType, E: ParserExtras<I>, T: Seq<'a, I::Token>>(
+pub fn none_of<'a, I: InputType + 'a, E: ParserExtras<I> + 'a, T: Seq<'a, I::Token> + 'a>(
         things: T,
-) -> impl Parser<I, I::Token, E>
+) -> impl Parser<I, I::Token, E> + 'a
 where
         I::Token: PartialEq + Clone,
         E::Error: LabelError<I, SeqLabel<I::Token>>,

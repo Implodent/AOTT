@@ -57,7 +57,7 @@ pub struct TakeExact<const A: usize>(usize);
 impl<I: InputType, E: ParserExtras<I>, const A: usize> Parser<I, [I::Token; A], E>
         for TakeExact<A>
 {
-        fn parse_with<'parse>(&self, inp: &mut Input<I, E>) -> $1PResult<$2, E> {
+        fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<[I::Token; A], E> {
                 let mut result: [MaybeUninit<I::Token>; A] = MaybeUninitExt::uninit_array();
 
                 for i in 0..A {
@@ -66,7 +66,8 @@ impl<I: InputType, E: ParserExtras<I>, const A: usize> Parser<I, [I::Token; A], 
 
                 Ok(unsafe { MaybeUninitExt::array_assume_init(result) })
         }
-        fn check_with(&self, inp: &mut Input<I, E>) -> $1PResult<$2, E> {
+
+        fn check_with(&self, inp: &mut Input<I, E>) -> PResult<(), E> {
                 for _ in 0..A {
                         inp.next()?;
                 }

@@ -71,7 +71,7 @@ macro_rules! impl_choice_for_tuple {
             $($X: Parser<I, O, E>),*
         {
             #[inline]
-            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<I, O, E> {
+            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<O, E> {
                 let mut error: E::Error;
                 let before = inp.save();
 
@@ -92,7 +92,7 @@ macro_rules! impl_choice_for_tuple {
                 Err(error)
             }
             #[inline]
-            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<I, (), E> {
+            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<(), E> {
                 let mut error: E::Error;
                 let before = inp.save();
 
@@ -123,12 +123,12 @@ macro_rules! impl_choice_for_tuple {
             $Head: Parser<I, O, E>,
         {
             #[inline]
-            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<I, O, E> {
+            fn parse_with(&self, inp: &mut Input<I, E>) -> PResult<O, E> {
                 self.parsers.0.parse_with(inp)
             }
 
             #[inline]
-            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<I, (), E> {
+            fn check_with(&self, inp: &mut Input<I, E>) -> PResult<(), E> {
                 self.parsers.0.check_with(inp)
             }
         }

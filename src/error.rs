@@ -49,7 +49,7 @@ pub trait LabelError<I: InputType, L>: Sized {
 pub trait Error<I: InputType>: FundamentalError<I> + LabelError<I, BuiltinLabel> {}
 impl<I: InputType, E: FundamentalError<I> + LabelError<I, BuiltinLabel>> Error<I> for E {}
 
-pub trait LabelWith<I: InputType, E: LabelError<I, Self>> {
+pub trait LabelWith<I: InputType, E: LabelError<I, Self>>: Sized {
         fn error(self, span: Range<usize>, last_token: Option<I::Token>) -> E;
 }
 
@@ -96,7 +96,7 @@ impl<T, E> Invert<T, E> for Result<T, E> {
                 self,
                 err_to_ok: impl FnOnce(E) -> T,
                 ok_to_err: impl FnOnce(T) -> E,
-        ) -> Self::This<E, T> {
+        ) -> Self::This<T, E> {
                 match self {
                         Ok(ok) => Err(ok_to_err(ok)),
                         Err(err) => Ok(err_to_ok(err)),

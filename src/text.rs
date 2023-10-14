@@ -214,14 +214,14 @@ pub mod ascii {
         #[track_caller]
         pub fn keyword<C: Char + core::fmt::Debug, I: StrInput<C>, E: ParserExtras<I>>(
                 keyword: &C::Str,
-        ) -> impl Fn(&mut Input<I, E>) -> Result<&'_ C::Str, E>
+        ) -> impl for<'parse> Fn(&mut Input<'parse, I, E>) -> Result<&'parse C::Str, E>
         where
                 C::Str: PartialEq,
                 E::Error: LabelError<I, CharLabel<C>>,
         {
                 #[cfg(debug_assertions)]
                 {
-                        let mut cs = C::str_to_chars(keyword.as_ref());
+                        let mut cs = C::str_to_chars(keyword);
                         if let Some(c) = cs.next() {
                                 assert!(c.to_char().is_ascii_alphabetic() || c.to_char() == '_', "The first character of a keyword must be ASCII alphabetic or an underscore, not {c:?}");
                         } else {
@@ -231,6 +231,7 @@ pub mod ascii {
                                 assert!(c.to_char().is_ascii_alphanumeric() || c.to_char() == '_', "Trailing characters of a keyword must be ASCII alphanumeric or an underscore, not {c:?}");
                         }
                 }
+
                 move |input| {
                         let before = input.offset;
                         let ident = ident(input)?;
@@ -437,7 +438,7 @@ pub mod unicode {
         {
                 #[cfg(debug_assertions)]
                 {
-                        let mut cs = C::str_to_chars(keyword.as_ref());
+                        let mut cs = C::str_to_chars(keyword);
                         if let Some(c) = cs.next() {
                                 assert!(c.is_ident_start(), "The first character of a keyword must be a valid unicode XID_START, not {c:?}");
                         } else {

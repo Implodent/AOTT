@@ -10,6 +10,12 @@ pub struct Stream<I: Iterator> {
         tokens: Cell<(Vec<I::Item>, Option<I>)>,
 }
 
+impl<I: Iterator> AsRef<Stream<I>> for Stream<I> {
+        fn as_ref(&self) -> &Stream<I> {
+                self
+        }
+}
+
 impl<I: Iterator> Debug for Stream<I> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 write!(f, "")
@@ -70,7 +76,7 @@ where
         I::Item: Clone + core::fmt::Debug,
 {
         type Token = I::Item;
-        type Owned = I;
+        type Owned = Self;
 
         #[inline(always)]
         fn start(&self) -> usize {

@@ -167,7 +167,6 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # Errors
         /// Returns an error if the parser failed.
         #[inline(always)]
-        #[track_caller]
         fn parse(&self, input: I) -> PResult<O, E>
         where
                 E: ParserExtras<I, Context = ()>,
@@ -180,7 +179,6 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// # Errors
         /// Returns an error if the parser failed.
         #[inline(always)]
-        #[track_caller]
         fn parse_with_context(&self, input: I, context: E::Context) -> PResult<(), E> {
                 let mut input = Input::new_with_context(&input, &context);
                 self.parse_with(&mut input)
@@ -189,12 +187,10 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Runs the parser logic, producing an output, or an error.
         /// # Errors
         /// Returns an error if the parser failed.
-        #[track_caller]
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<O, E>;
         /// Runs the parser logic without producing output, thus significantly reducing the number of allocations.
         /// # Errors
         /// Returns an error if the parser failed.
-        #[track_caller]
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E>;
 
         /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
@@ -231,24 +227,28 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Map(self, PhantomData, mapper, PhantomData)
         }
+
         fn to<U>(self, value: U) -> To<Self, O, U>
         where
                 Self: Sized,
         {
                 To(self, value, PhantomData)
         }
+
         fn ignored(self) -> Ignored<Self, O>
         where
                 Self: Sized,
         {
                 Ignored(self, EmptyPhantom::new())
         }
+
         fn try_map<F: Fn(O) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
         where
                 Self: Sized,
         {
                 TryMap(self, f, PhantomData, PhantomData)
         }
+
         fn try_map_with_span<F: Fn(O, Range<usize>) -> Result<U, E::Error>, U>(
                 self,
                 f: F,
@@ -258,6 +258,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 TryMapWithSpan(self, f, PhantomData, PhantomData)
         }
+
         fn filter<F: Fn(&O) -> bool, L: Clone>(self, f: F, label: L) -> FilterParser<Self, F, O, L>
         where
                 Self: Sized,
@@ -298,25 +299,29 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                         phantom: PhantomData,
                 }
         }
+
         fn slice<'a>(self) -> Slice<'a, I, E, O, Self>
         where
-                I: SliceInput,
+                I: SliceInput + 'a,
                 Self: Sized,
         {
                 slice(self)
         }
+
         fn then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, true, false>
         where
                 Self: Sized,
         {
                 Then(self, other, PhantomData)
         }
+
         fn ignore_then<O2, P: Parser<I, O2, E>>(self, other: P) -> Then<O, O2, Self, P, false, true>
         where
                 Self: Sized,
         {
                 Then(self, other, PhantomData)
         }
+
         fn then_ignore<O2, P: Parser<I, O2, E>>(
                 self,
                 other: P,
@@ -326,6 +331,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Then(self, other, PhantomData)
         }
+
         fn optional(self) -> Maybe<Self>
         where
                 Self: Sized,

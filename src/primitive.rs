@@ -1,16 +1,16 @@
 // just, filter, end, nothing, one_of, none_of, separated_by, filter_map,
 // select!, take, take_while, take_while_bounded
 
-use core::{borrow::Borrow, ops::Range};
+use core::{borrow::Borrow, marker::PhantomData, ops::Range};
 
 use crate::{
         container::OrderedSeq,
-        error::{FundamentalError, LabelWith},
+        error::{FundamentalError, LabelError, LabelWith},
         input::{Input, InputType},
         parser::{Emit, Mode, Parser, ParserExtras},
         pfn_type,
         prelude::Invert,
-        EmptyPhantom, IResult,
+        EmptyPhantom, IResult, PResult,
 };
 
 mod choice;
@@ -143,27 +143,33 @@ impl<I: InputType, E: ParserExtras<I>, O, A: Parser<I, O, E>> Parser<I, Option<O
 }
 
 #[derive(Copy, Clone)]
-pub struct Not<P>(pub(crate) P);
+pub struct Not<O, P>(pub(crate) P, pub(crate) PhantomData<O>);
 
-impl<I: InputType, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, E::Error, E> for Not<P>
+impl<I: InputType, E: ParserExtras<I>, O, P: Parser<I, O, E>> Parser<I, E::Error, E> for Not<O, P>
 where
         E::Error: LabelError<I, NotSucceeded>,
 {
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<E::Error, E> {
                 let before = input.offset;
                 self.0.parse_with(input)
-                        .invert(core::convert::identity, |_| {
-                                NotSucceeded.error(input.span_since(before), input.current())
-                        })
+                        .invert(core::convert::identity, not_ok2e(input, before))
         }
 
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<(), E> {
                 let before = input.offset;
                 self.0.check_with(input)
-                        .invert(core::convert::identity, |()| {
-                                NotSucceeded.error(input.span_since(before), input.current())
-                        })
+                        .invert(core::convert::identity, not_ok2e(input, before))
         }
+}
+
+fn not_ok2e<I: InputType, OK, E: ParserExtras<I>>(
+        input: &Input<I, E>,
+        before: usize,
+) -> impl FnOnce(OK) -> E::Error
+where
+        E::Error: LabelError<I, NotSucceeded>,
+{
+        move |_| NotSucceeded.error(input.span_since(before), input.current())
 }
 
 /// This is a label, that indicates a parser put in [`Not`], succeeded.
