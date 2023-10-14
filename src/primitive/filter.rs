@@ -41,7 +41,12 @@ where
         })
 }
 
-pub struct FilterParser<A, F, O, L, LF: Fn(O) -> L>(pub(crate) A, pub(crate) F, pub(crate) LF);
+pub struct FilterParser<A, F, O, L, LF: Fn(O) -> L>(
+        pub(crate) A,
+        pub(crate) F,
+        pub(crate) LF,
+        pub(crate) PhantomData<(O, L)>,
+);
 
 impl<
                 I: InputType,
