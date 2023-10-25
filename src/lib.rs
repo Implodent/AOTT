@@ -49,9 +49,9 @@ pub mod prelude {
         pub use crate::derive::parser;
         pub use crate::error::{Error, PResult};
         pub use crate::extra;
-        pub use crate::input::{
-                ExactSizeInput, Input, InputOwned, InputType, SliceInput, StrInput,
-        };
+        #[cfg(feature = "builtin-text")]
+        pub use crate::input::StrInput;
+        pub use crate::input::{ExactSizeInput, Input, InputOwned, InputType, SliceInput};
         pub use crate::iter::*;
         pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;

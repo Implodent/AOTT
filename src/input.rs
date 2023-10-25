@@ -1,9 +1,10 @@
 #![allow(dead_code)]
+#[cfg(feature = "builtin-text")]
+use crate::text::Char;
 use crate::{
         error::{FundamentalError as Error, Located},
         extra,
         parser::{Parser, ParserExtras},
-        text::Char,
 };
 use core::ops::{Range, RangeFrom};
 
@@ -370,6 +371,7 @@ pub trait SliceInput<'a>: ExactSizeInput {
         fn slice_from(&self, from: RangeFrom<usize>) -> Self::Slice;
 }
 
+#[cfg(feature = "builtin-text")]
 pub trait StrInput<'a, C: Char>: InputType<Token = C> + SliceInput<'a, Slice = &'a C::Str> {}
 impl<'a> ExactSizeInput for &'a str {
         #[inline(always)]
@@ -389,6 +391,7 @@ impl<'a, T: Clone> ExactSizeInput for &'a [T] {
 //                 (range.start..N).into()
 //         }
 // }
+#[cfg(feature = "builtin-text")]
 impl<'a> StrInput<'a, char> for &'a str {}
 
 impl<'a> SliceInput<'a> for &'a str {
@@ -410,6 +413,7 @@ impl<'a> SliceInput<'a> for &'a str {
         }
 }
 
+#[cfg(feature = "builtin-text")]
 impl<'a> StrInput<'a, u8> for &'a [u8] {}
 
 impl<'a, T: Clone> SliceInput<'a> for &'a [T] {

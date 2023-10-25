@@ -1,6 +1,7 @@
 use crate::error::{Error, FundamentalError};
 use crate::input::InputType;
 use crate::parser::ParserExtras;
+#[cfg(feature = "builtin-text")]
 use crate::text::Char;
 use core::fmt::Debug;
 use core::marker::PhantomData;
@@ -18,7 +19,7 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 }
 
 macro_rules! simple {
-        ($bound:tt) => {
+        ($bound:path) => {
                 #[derive(Debug, Clone, derive_more::Display)]
                 #[display(bound = concat!("Item: Debug + ", stringify!($bound)))]
                 pub enum Simple<Item: $bound> {
@@ -147,10 +148,4 @@ macro_rules! simple {
 simple!(Char);
 
 #[cfg(not(feature = "builtin-text"))]
-simple!(Nothing);
-
-#[cfg(not(feature = "builtin-text"))]
-trait Nothing {}
-
-#[cfg(not(feature = "builtin-text"))]
-impl<T: ?Sized> Nothing for T {}
+simple!(core::fmt::Debug);
