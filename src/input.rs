@@ -6,7 +6,7 @@ use crate::{
         extra,
         parser::{Parser, ParserExtras},
 };
-use core::ops::{Range, RangeFrom};
+use std::ops::{Range, RangeFrom};
 
 #[allow(clippy::module_name_repetitions)]
 pub trait InputType {

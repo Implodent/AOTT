@@ -1,4 +1,4 @@
-use core::{marker::PhantomData, ops::Range};
+use std::{marker::PhantomData, ops::Range};
 
 #[allow(deprecated)]
 use crate::{

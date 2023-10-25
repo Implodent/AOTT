@@ -19,7 +19,7 @@ macro_rules! define_number_mod {
                         input: &mut $crate::input::Input<I, E>,
                 ) -> $crate::error::PResult<I, $num, E> {
                     use $crate::parser::Parser;
-                    let bytes = $crate::primitive::take_exact::<{core::mem::size_of::<$num>()}>().parse_with(input)?;
+                    let bytes = $crate::primitive::take_exact::<{std::mem::size_of::<$num>()}>().parse_with(input)?;
                     Ok($num::$from_endian_name(bytes))
                 }
         };

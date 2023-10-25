@@ -1,4 +1,4 @@
-use core::{mem::MaybeUninit, ops::RangeTo};
+use std::{mem::MaybeUninit, ops::RangeTo};
 
 use crate::{pfn_type, MaybeUninitExt};
 

@@ -1,7 +1,7 @@
 // just, filter, end, nothing, one_of, none_of, separated_by, filter_map,
 // select!, take, take_while, take_while_bounded
 
-use core::{borrow::Borrow, ops::Range};
+use std::{borrow::Borrow, ops::Range};
 
 use crate::{
         container::OrderedSeq,

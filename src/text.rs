@@ -1,4 +1,4 @@
-use core::{borrow::Borrow, marker::PhantomData};
+use std::{borrow::Borrow, marker::PhantomData};
 
 use crate::{
         container::OrderedSeq,
@@ -44,12 +44,12 @@ pub enum CharLabel<C: Char> {
 ///
 /// This trait is currently sealed to minimize the impact of breaking changes. If you find a type that you think should
 /// implement this trait, please [open an issue/PR](https://github.com/Implodent/AOTT/issues/new).
-pub trait Char: Sized + Clone + Copy + PartialEq + core::fmt::Debug + Sealed + 'static {
+pub trait Char: Sized + Clone + Copy + PartialEq + std::fmt::Debug + Sealed + 'static {
         /// The default unsized [`str`]-like type of a linear sequence of this character.
         ///
         /// For [`char`], this is [`str`]. For [`u8`], this is [`[u8]`].
-        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + core::fmt::Debug + 'static;
-        type Owned: 'static + AsRef<Self::Str> + Clone + PartialEq + Eq + core::fmt::Debug;
+        type Str: ?Sized + AsRef<[u8]> + AsRef<Self::Str> + std::fmt::Debug + 'static;
+        type Owned: 'static + AsRef<Self::Str> + Clone + PartialEq + Eq + std::fmt::Debug;
 
         /// Convert the given ASCII character to this character type.
         fn from_ascii(c: u8) -> Self;
@@ -109,7 +109,7 @@ impl Char for char {
                 *self
         }
 
-        type StrCharIter<'a> = core::str::Chars<'a>;
+        type StrCharIter<'a> = std::str::Chars<'a>;
         fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
                 s.chars()
         }
@@ -151,7 +151,7 @@ impl Char for u8 {
                 *self as char
         }
 
-        type StrCharIter<'a> = core::iter::Copied<core::slice::Iter<'a, u8>>;
+        type StrCharIter<'a> = std::iter::Copied<std::slice::Iter<'a, u8>>;
         fn str_to_chars(s: &Self::Str) -> Self::StrCharIter<'_> {
                 s.iter().copied()
         }
@@ -215,7 +215,7 @@ pub mod ascii {
         pub fn keyword<
                 'a,
                 'b: 'a,
-                C: Char + core::fmt::Debug + 'a,
+                C: Char + std::fmt::Debug + 'a,
                 I: InputType + StrInput<'a, C> + 'a,
                 E: ParserExtras<I> + 'a,
         >(
@@ -379,7 +379,7 @@ use self::private::Sealed;
 
 /// Parsers and utilities for working with unicode inputs.
 pub mod unicode {
-        use core::fmt::Display;
+        use std::fmt::Display;
 
         use crate::pfn_type;
 

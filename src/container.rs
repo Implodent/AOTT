@@ -2,14 +2,14 @@ use crate::MaybeRef;
 use crate::MaybeUninitExt;
 use alloc::rc::Rc;
 use alloc::sync::Arc;
-use core::borrow::Borrow;
-use core::cell::Cell;
-use core::cell::RefCell;
-use core::cell::UnsafeCell;
-use core::hash::Hash;
-use core::mem::MaybeUninit;
-use core::ops::Range;
-use core::ops::RangeFrom;
+use std::borrow::Borrow;
+use std::cell::Cell;
+use std::cell::RefCell;
+use std::cell::UnsafeCell;
+use std::hash::Hash;
+use std::mem::MaybeUninit;
+use std::ops::Range;
+use std::ops::RangeFrom;
 use hashbrown::HashMap;
 
 use alloc::collections::LinkedList;
@@ -308,13 +308,13 @@ impl<'p, T: Clone> Seq<'p, T> for T {
     where
         Self: 'a;
 
-        type Iter<'a> = core::iter::Once<&'a T>
+        type Iter<'a> = std::iter::Once<&'a T>
     where
         Self: 'a;
 
         #[inline(always)]
         fn seq_iter(&self) -> Self::Iter<'_> {
-                core::iter::once(self)
+                std::iter::once(self)
         }
 
         #[inline(always)]
@@ -339,13 +339,13 @@ impl<'p, T> Seq<'p, T> for &'p T {
     where
         Self: 'a;
 
-        type Iter<'a> = core::iter::Once<&'p T>
+        type Iter<'a> = std::iter::Once<&'p T>
     where
         Self: 'a;
 
         #[inline(always)]
         fn seq_iter(&self) -> Self::Iter<'_> {
-                core::iter::once(*self)
+                std::iter::once(*self)
         }
 
         #[inline(always)]
@@ -370,7 +370,7 @@ impl<'p, T> Seq<'p, T> for &'p [T] {
     where
         Self: 'a;
 
-        type Iter<'a> = core::slice::Iter<'p, T>
+        type Iter<'a> = std::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -401,7 +401,7 @@ impl<'p, T: Clone, const N: usize> Seq<'p, T> for [T; N] {
     where
         Self: 'a;
 
-        type Iter<'a> = core::slice::Iter<'a, T>
+        type Iter<'a> = std::slice::Iter<'a, T>
     where
         Self: 'a;
 
@@ -432,7 +432,7 @@ impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
     where
         Self: 'a;
 
-        type Iter<'a> = core::slice::Iter<'p, T>
+        type Iter<'a> = std::slice::Iter<'p, T>
     where
         Self: 'a;
 
@@ -464,7 +464,7 @@ impl<'p, T: Clone> Seq<'p, T> for Vec<T> {
     where
         Self: 'a;
 
-        type Iter<'a> = core::slice::Iter<'a, T>
+        type Iter<'a> = std::slice::Iter<'a, T>
     where
         Self: 'a;
 
@@ -647,7 +647,7 @@ where
         }
 }
 
-impl<'p, T> Seq<'p, T> for core::ops::RangeInclusive<T>
+impl<'p, T> Seq<'p, T> for std::ops::RangeInclusive<T>
 where
         T: Clone + PartialOrd,
         Self: Iterator<Item = T>,
@@ -656,7 +656,7 @@ where
     where
         Self: 'a;
 
-        type Iter<'a> = core::ops::RangeInclusive<T>
+        type Iter<'a> = std::ops::RangeInclusive<T>
     where
         Self: 'a;
 
@@ -667,7 +667,7 @@ where
 
         #[inline(always)]
         fn contains(&self, val: &T) -> bool {
-                core::ops::RangeInclusive::contains(self, val)
+                std::ops::RangeInclusive::contains(self, val)
         }
 
         #[inline]
@@ -716,7 +716,7 @@ impl<'p> Seq<'p, char> for str {
     where
         Self: 'a;
 
-        type Iter<'a> = core::str::Chars<'a>
+        type Iter<'a> = std::str::Chars<'a>
     where
         Self: 'a;
 
@@ -744,7 +744,7 @@ impl<'p> Seq<'p, char> for &'p str {
     where
         Self: 'a;
 
-        type Iter<'a> = core::str::Chars<'a>
+        type Iter<'a> = std::str::Chars<'a>
     where
         Self: 'a;
 
@@ -772,7 +772,7 @@ impl<'p> Seq<'p, char> for String {
     where
         Self: 'a;
 
-        type Iter<'a> = core::str::Chars<'a>
+        type Iter<'a> = std::str::Chars<'a>
     where
         Self: 'a;
 
@@ -807,7 +807,7 @@ impl<'p, T: Clone, const N: usize> OrderedSeq<'p, T> for [T; N] {}
 impl<'p, T, const N: usize> OrderedSeq<'p, T> for &'p [T; N] {}
 impl<'p, T: Clone> OrderedSeq<'p, T> for Vec<T> {}
 impl<'p, T> OrderedSeq<'p, T> for Range<T> where Self: Seq<'p, T> {}
-impl<'p, T> OrderedSeq<'p, T> for core::ops::RangeInclusive<T> where Self: Seq<'p, T> {}
+impl<'p, T> OrderedSeq<'p, T> for std::ops::RangeInclusive<T> where Self: Seq<'p, T> {}
 impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
 impl<'p> OrderedSeq<'p, char> for str {}

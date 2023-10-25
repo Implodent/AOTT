@@ -1,4 +1,4 @@
-use core::{
+use std::{
         cell::Cell,
         fmt::Debug,
         ops::{Range, RangeFrom},
@@ -10,7 +10,7 @@ pub struct Stream<I: Iterator> {
         tokens: Cell<(Vec<I::Item>, Option<I>)>,
 }
 impl<I: Iterator> Debug for Stream<I> {
-        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "")
         }
 }
@@ -65,7 +65,7 @@ pub type BoxedExactSizeStream<'a, T> = Stream<Box<dyn ExactSizeIterator<Item = T
 
 impl<I: Iterator> InputType for Stream<I>
 where
-        I::Item: Clone + core::fmt::Debug,
+        I::Item: Clone + std::fmt::Debug,
 {
         type Token = I::Item;
         type OwnedMut = I;
@@ -104,7 +104,7 @@ where
 
 impl<I: ExactSizeIterator> ExactSizeInput for Stream<I>
 where
-        I::Item: Clone + core::fmt::Debug,
+        I::Item: Clone + std::fmt::Debug,
 {
         #[inline(always)]
         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize> {

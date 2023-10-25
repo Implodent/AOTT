@@ -1,4 +1,4 @@
-use core::ops::Range;
+use std::ops::Range;
 
 use alloc::borrow::Cow;
 

@@ -16,14 +16,13 @@
         )
 )]
 #![cfg_attr(all(feature = "nightly", not(feature = "std")), feature(error_in_core))]
-#![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate alloc;
 // allow derive to use ::aott::PResult
 extern crate self as aott;
 
-use core::mem::MaybeUninit;
-use core::ops::Deref;
+use std::mem::MaybeUninit;
+use std::ops::Deref;
 #[cfg(feature = "builtin-bytes")]
 pub mod bytes;
 pub mod container;
@@ -135,11 +134,11 @@ impl<T: Clone, R: Deref<Target = T>> MaybeDeref<T, R> {
 
 /// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
 /// with `PhantomData`.
-struct EmptyPhantom<T>(core::marker::PhantomData<T>);
+struct EmptyPhantom<T>(std::marker::PhantomData<T>);
 
 impl<T> EmptyPhantom<T> {
         const fn new() -> Self {
-                Self(core::marker::PhantomData)
+                Self(std::marker::PhantomData)
         }
 }
 
@@ -154,8 +153,8 @@ unsafe impl<T> Send for EmptyPhantom<T> {}
 // SAFETY: This is safe because `EmptyPhantom` doesn't actually contain a `T`.
 unsafe impl<T> Sync for EmptyPhantom<T> {}
 impl<T> Unpin for EmptyPhantom<T> {}
-impl<T> core::panic::UnwindSafe for EmptyPhantom<T> {}
-impl<T> core::panic::RefUnwindSafe for EmptyPhantom<T> {}
+impl<T> std::panic::UnwindSafe for EmptyPhantom<T> {}
+impl<T> std::panic::RefUnwindSafe for EmptyPhantom<T> {}
 
 // TODO: Remove this when MaybeUninit transforms to/from arrays stabilize in any form
 pub(crate) trait MaybeUninitExt<T>: Sized {
@@ -175,7 +174,7 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
 
         unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
                 let out = (std::ptr::addr_of!(uninit) as *const [T; N]).read();
-                core::mem::forget(uninit);
+                std::mem::forget(uninit);
                 out
         }
 }

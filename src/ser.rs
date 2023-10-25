@@ -58,7 +58,7 @@ impl Endian for Native {}
 /// assert_eq!(deserialize_from::<_, extra::Err<&[u8]>, _>(&[0x63][..]), Ok(Number(99u8, Big)));
 /// ```
 #[derive(Copy, Clone, Deref, DerefMut, Debug, Display, PartialEq, Eq)]
-#[display(bound = "N: core::fmt::Display")]
+#[display(bound = "N: std::fmt::Display")]
 #[display(fmt = "{_0}")]
 pub struct Number<N, E: Endian>(
         #[deref]
@@ -80,7 +80,7 @@ macro_rules! number_impl {
                         {
                                 Ok(Number(
                                         <$num>::from_be_bytes(
-                                                take_exact::<{ core::mem::size_of::<$num>() }>()
+                                                take_exact::<{ std::mem::size_of::<$num>() }>()
                                                         .parse_with(input)?,
                                         ),
                                         Big,
@@ -98,7 +98,7 @@ macro_rules! number_impl {
                         {
                                 Ok(Number(
                                         <$num>::from_le_bytes(
-                                                take_exact::<{ core::mem::size_of::<$num>() }>()
+                                                take_exact::<{ std::mem::size_of::<$num>() }>()
                                                         .parse_with(input)?,
                                         ),
                                         Little,
@@ -116,7 +116,7 @@ macro_rules! number_impl {
                         {
                                 Ok(Number(
                                         <$num>::from_ne_bytes(
-                                                take_exact::<{ core::mem::size_of::<$num>() }>()
+                                                take_exact::<{ std::mem::size_of::<$num>() }>()
                                                         .parse_with(input)?,
                                         ),
                                         Native,

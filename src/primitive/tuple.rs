@@ -6,7 +6,7 @@ use super::*;
 pub struct Then<O1, O2, A, B, const I: bool, const AI: bool>(
         pub(crate) A,
         pub(crate) B,
-        pub(crate) core::marker::PhantomData<(O1, O2)>,
+        pub(crate) std::marker::PhantomData<(O1, O2)>,
 );
 
 impl<I: InputType, E: ParserExtras<I>, O1, O2, A: Parser<I, O1, E>, B: Parser<I, O2, E>>

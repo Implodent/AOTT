@@ -3,9 +3,9 @@ use crate::input::InputType;
 use crate::parser::ParserExtras;
 #[cfg(feature = "builtin-text")]
 use crate::text::Char;
-use core::fmt::Debug;
-use core::marker::PhantomData;
-use core::ops::Range;
+use std::fmt::Debug;
+use std::marker::PhantomData;
+use std::ops::Range;
 
 #[derive(Default, Clone, Copy, Debug)]
 pub struct Err<I: InputType, E: Error<I> = Simple<<I as InputType>::Token>>(
@@ -19,29 +19,28 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 }
 
 macro_rules! simple {
-        ($bound:path) => {
-                #[derive(Debug, Clone, derive_more::Display)]
-                #[display(bound = concat!("Item: Debug + ", stringify!($bound)))]
+        ($bound:tt) => {
+                #[derive(Debug, Clone, thiserror::Error)]
                 pub enum Simple<Item: $bound> {
-                        #[display(
-                                fmt = "expected end of file at {}..{}, but found {found:?}",
-                                "span.start",
-                                "span.end"
+                        #[error(
+                                "expected end of file at {}..{}, but found {found:?}",
+                                .span.start,
+                                .span.end
                         )]
                         ExpectedEOF { found: Item, span: Range<usize> },
-                        #[display(
-                                fmt = "unexpected end of file at {}..{}, expected {expected:?}",
-                                "span.start",
-                                "span.end"
+                        #[error(
+                                "unexpected end of file at {}..{}, expected {expected:?}",
+                                .span.start,
+                                .span.end
                         )]
                         UnexpectedEOF {
                                 span: Range<usize>,
                                 expected: Option<Vec<Item>>,
                         },
-                        #[display(
-                                fmt = "expected {expected:?} at {}..{}, but found {found:?}",
-                                "span.start",
-                                "span.end"
+                        #[error(
+                                "expected {expected:?} at {}..{}, but found {found:?}",
+                                .span.start,
+                                .span.end
                         )]
                         ExpectedTokenFound {
                                 span: Range<usize>,
@@ -49,20 +48,20 @@ macro_rules! simple {
                                 found: Item,
                         },
                         #[cfg(feature = "builtin-text")]
-                        #[display(
-                                fmt = "{error} at {}..{}, last token was {last_token:?}",
-                                "span.start",
-                                "span.end"
+                        #[error(
+                                "{error} at {}..{}, last token was {last_token:?}",
+                                .span.start,
+                                .span.end
                         )]
                         Text {
                                 span: Range<usize>,
                                 error: crate::text::CharLabel<Item>,
                                 last_token: Option<Item>,
                         },
-                        #[display(
-                                fmt = "{label} at {}..{}, last token was {last_token:?}",
-                                "span.start",
-                                "span.end"
+                        #[error(
+                                "{label} at {}..{}, last token was {last_token:?}",
+                                .span.start,
+                                .span.end
                         )]
                         Builtin {
                                 span: Range<usize>,
@@ -128,19 +127,6 @@ macro_rules! simple {
                                 }
                         }
                 }
-
-                #[cfg(feature = "std")]
-                impl<Item: Debug + $bound + 'static> std::error::Error for Simple<Item> {
-                        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-                                None
-                        }
-                }
-                #[cfg(all(feature = "nightly", not(feature = "std")))]
-                impl<Item: Debug + $bound + 'static> core::error::Error for Simple<Item> {
-                        fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-                                None
-                        }
-                }
         };
 }
 
@@ -148,4 +134,11 @@ macro_rules! simple {
 simple!(Char);
 
 #[cfg(not(feature = "builtin-text"))]
-simple!(core::fmt::Debug);
+simple!(Nothing);
+
+#[cfg(not(feature = "builtin-text"))]
+#[doc(hidden)]
+pub trait Nothing {}
+
+#[cfg(not(feature = "builtin-text"))]
+impl<T: ?Sized> Nothing for T {}
