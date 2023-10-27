@@ -1,9 +1,33 @@
 use std::marker::PhantomData;
 
+use crate::input::SliceInput;
+
 use super::*;
 
-pub struct Or<A, B>(pub(crate) A, pub(crate) B);
+pub struct MapExtra<'input, 'parse, I: InputType, E: ParserExtras<I>> {
+        start: I::Offset,
+        #[doc(hidden)]
+        pub input: &'input mut Input<'parse, I, E>,
+}
 
+impl<'input, 'parse, I: InputType, E: ParserExtras<I>> MapExtra<'input, 'parse, I, E> {
+        pub fn span(&self) -> I::Span {
+                self.input.span_since(self.start)
+        }
+
+        pub fn slice(&self) -> I::Slice
+        where
+                I: SliceInput<'parse>,
+        {
+                self.input.input.slice(self.span())
+        }
+
+        pub fn context(&self) -> &E::Context {
+                self.input.context()
+        }
+}
+
+pub struct Or<A, B>(pub(crate) A, pub(crate) B);
 impl<A, B, I: InputType, O, E: ParserExtras<I>> Parser<I, O, E> for Or<A, B>
 where
         A: Parser<I, O, E>,
@@ -55,54 +79,49 @@ impl<I: InputType, O, E: ParserExtras<I>, U: Clone, A: Parser<I, O, E>> Parser<I
         }
 }
 
-pub struct TryMap<A, F, O, U>(
+pub struct TryMapWith<A, F, O, U>(
         pub(crate) A,
         pub(crate) F,
         pub(crate) PhantomData<O>,
         pub(crate) PhantomData<U>,
 );
+
 impl<
                 I: InputType,
                 O,
                 E: ParserExtras<I>,
                 U,
-                F: Fn(O) -> Result<U, E::Error>,
+                F: for<'input, 'parse> Fn(
+                        O,
+                        &mut MapExtra<'input, 'parse, I, E>,
+                ) -> Result<U, E::Error>,
                 A: Parser<I, O, E>,
-        > Parser<I, U, E> for TryMap<A, F, O, U>
-{
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                self.0.parse_with(input).and_then(&self.1).map(|_| {})
-        }
-
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
-                self.0.parse_with(input).and_then(|thing| self.1(thing))
-        }
-}
-
-pub struct TryMapWithSpan<A, F, O, U>(
-        pub(crate) A,
-        pub(crate) F,
-        pub(crate) PhantomData<O>,
-        pub(crate) PhantomData<U>,
-);
-impl<
-                I: InputType,
-                O,
-                E: ParserExtras<I>,
-                U,
-                F: Fn(O, Range<usize>) -> Result<U, E::Error>,
-                A: Parser<I, O, E>,
-        > Parser<I, U, E> for TryMapWithSpan<A, F, O, U>
+        > Parser<I, U, E> for TryMapWith<A, F, O, U>
 {
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let befunge = input.offset;
-                self.0.parse_with(input)
-                        .and_then(|thing| self.1(thing, input.span_since(befunge)).map(|_| {}))
+                self.0.parse_with(input).and_then(|thing| {
+                        self.1(
+                                thing,
+                                &mut MapExtra {
+                                        start: befunge,
+                                        input,
+                                },
+                        )
+                        .map(|_| {})
+                })
         }
 
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, U, E> {
                 let befunge = input.offset;
-                self.0.parse_with(input)
-                        .and_then(|thing| self.1(thing, input.span_since(befunge)))
+                self.0.parse_with(input).and_then(|thing| {
+                        self.1(
+                                thing,
+                                &mut MapExtra {
+                                        start: befunge,
+                                        input,
+                                },
+                        )
+                })
         }
 }

@@ -16,7 +16,7 @@ where
                         let next = T::to_maybe_ref(next);
                         match input.next_inner() {
                                 (_, Some(token)) if next.borrow_as_t() == token.borrow() => None,
-                                (_, found) => Some(FundamentalError::expected_token_found_or_eof(
+                                (_, found) => Some(Error::expected_token_found_or_eof(
                                         input.span_since(befunge),
                                         vec![next.into_clone()],
                                         found,

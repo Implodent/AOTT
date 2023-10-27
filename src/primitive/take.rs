@@ -41,7 +41,7 @@ pub fn take<I: InputType, E: ParserExtras<I>>(
                         result.push(input.next()?);
                 }
                 if n < range.start {
-                        let error = FundamentalError::expected_token_found(
+                        let error = Error::expected_token_found(
                                 input.span_since(before),
                                 vec![],
                                 input.current().expect("no token??"),

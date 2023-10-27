@@ -1,17 +1,13 @@
-use crate::error::{Error, FundamentalError};
-use crate::input::InputType;
+use crate::error::Error;
+use crate::input::{InputType, Span};
 use crate::parser::ParserExtras;
 #[cfg(feature = "builtin-text")]
 use crate::text::Char;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::Range;
 
 #[derive(Default, Clone, Copy, Debug)]
-pub struct Err<I: InputType, E: Error<I> = Simple<<I as InputType>::Token>>(
-        PhantomData<I>,
-        PhantomData<E>,
-);
+pub struct Err<I: InputType, E: Error<I> = Simple<I>>(PhantomData<I>, PhantomData<E>);
 
 impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
         type Error = E;
@@ -20,64 +16,75 @@ impl<I: InputType, E: Error<I>> ParserExtras<I> for Err<I, E> {
 
 macro_rules! simple {
         ($bound:tt) => {
-                #[derive(Debug, Clone, thiserror::Error)]
-                pub enum Simple<Item: $bound> {
+                #[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+                pub enum Simple<I: InputType> where I::Token: $bound {
                         #[error(
                                 "expected end of file at {}..{}, but found {found:?}",
-                                .span.start,
-                                .span.end
+                                .span.start(),
+                                .span.end()
                         )]
-                        ExpectedEOF { found: Item, span: Range<usize> },
+                        ExpectedEOF { found: I::Token, span: I::Span },
                         #[error(
                                 "unexpected end of file at {}..{}, expected {expected:?}",
-                                .span.start,
-                                .span.end
+                                .span.start(),
+                                .span.end()
                         )]
                         UnexpectedEOF {
-                                span: Range<usize>,
-                                expected: Option<Vec<Item>>,
+                                span: I::Span,
+                                expected: Option<Vec<I::Token>>,
                         },
                         #[error(
                                 "expected {expected:?} at {}..{}, but found {found:?}",
-                                .span.start,
-                                .span.end
+                                .span.start(),
+                                .span.end()
                         )]
                         ExpectedTokenFound {
-                                span: Range<usize>,
-                                expected: Vec<Item>,
-                                found: Item,
+                                span: I::Span,
+                                expected: Vec<I::Token>,
+                                found: I::Token,
                         },
                         #[cfg(feature = "builtin-text")]
                         #[error(
                                 "{error} at {}..{}, last token was {last_token:?}",
-                                .span.start,
-                                .span.end
+                                .span.start(),
+                                .span.end()
                         )]
                         Text {
-                                span: Range<usize>,
-                                error: crate::text::CharLabel<Item>,
-                                last_token: Option<Item>,
+                                span: I::Span,
+                                error: crate::text::CharLabel<I::Token>,
+                                last_token: Option<I::Token>,
                         },
                         #[error(
                                 "{label} at {}..{}, last token was {last_token:?}",
-                                .span.start,
-                                .span.end
+                                .span.start(),
+                                .span.end()
                         )]
-                        Builtin {
-                                span: Range<usize>,
-                                label: crate::error::BuiltinLabel,
-                                last_token: Option<Item>,
+                        Sequence {
+                                span: I::Span,
+                                label: crate::primitive::SeqLabel<I::Token>,
+                                last_token: Option<I::Token>,
+                        },
+                        #[error(
+                                "{} at {}..{}, last token was {last_token:?}",
+                                .label.0,
+                                .span.start(),
+                                .span.end()
+                        )]
+                        Filtering {
+                                span: I::Span,
+                                label: crate::error::Filtering,
+                                last_token: Option<I::Token>,
                         },
                 }
 
-                impl<Item: $bound, I: InputType<Token = Item>> FundamentalError<I>
-                        for Simple<Item>
+                impl<I: InputType> Error<I>
+                        for Simple<I> where I::Token: $bound
                 {
-                        fn expected_eof_found(span: Range<usize>, found: Item) -> Self {
+                        fn expected_eof_found(span: I::Span, found: I::Token) -> Self {
                                 Self::ExpectedEOF { found, span }
                         }
                         fn expected_token_found(
-                                span: Range<usize>,
+                                span: I::Span,
                                 expected: Vec<<I as InputType>::Token>,
                                 found: <I as InputType>::Token,
                         ) -> Self {
@@ -88,22 +95,38 @@ macro_rules! simple {
                                 }
                         }
                         fn unexpected_eof(
-                                span: Range<usize>,
+                                span: I::Span,
                                 expected: Option<Vec<<I as InputType>::Token>>,
                         ) -> Self {
                                 Self::UnexpectedEOF { span, expected }
                         }
                 }
 
-                impl<Item: $bound, I: InputType<Token = Item>>
-                        crate::error::LabelError<I, crate::error::BuiltinLabel> for Simple<Item>
+                impl<I: InputType>
+                        crate::error::LabelError<I, crate::primitive::SeqLabel<I::Token>> for Simple<I>where I::Token: $bound
                 {
                         fn from_label(
-                                span: Range<usize>,
-                                label: crate::error::BuiltinLabel,
-                                last_token: Option<Item>,
+                                span: I::Span,
+                                label: crate::primitive::SeqLabel<I::Token>,
+                                last_token: Option<I::Token>,
                         ) -> Self {
-                                Self::Builtin {
+                                Self::Sequence {
+                                        span,
+                                        label,
+                                        last_token,
+                                }
+                        }
+                }
+
+                impl<I: InputType>
+                        crate::error::LabelError<I, crate::error::Filtering> for Simple<I>where I::Token: $bound
+                {
+                        fn from_label(
+                                span: I::Span,
+                                label: crate::error::Filtering,
+                                last_token: Option<I::Token>,
+                        ) -> Self {
+                                Self::Filtering {
                                         span,
                                         label,
                                         last_token,
@@ -112,13 +135,13 @@ macro_rules! simple {
                 }
 
                 #[cfg(feature = "builtin-text")]
-                impl<C: Char, I: InputType<Token = C>>
-                        crate::error::LabelError<I, crate::text::CharLabel<C>> for Simple<C>
+                impl<I: InputType>
+                        crate::error::LabelError<I, crate::text::CharLabel<I::Token>> for Simple<I> where I::Token: Char
                 {
                         fn from_label(
-                                span: Range<usize>,
-                                error: crate::text::CharLabel<C>,
-                                last_token: Option<C>,
+                                span: I::Span,
+                                error: crate::text::CharLabel<I::Token>,
+                                last_token: Option<I::Token>,
                         ) -> Self {
                                 Self::Text {
                                         span,

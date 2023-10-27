@@ -1,11 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-        container::Seq,
-        error::{BuiltinLabel, LabelError},
-        input::SliceInput,
-        iter::IterParser,
-        parser::Check,
+        container::Seq, error::LabelError, input::SliceInput, iter::IterParser, parser::Check,
         pfn_type,
 };
 
@@ -43,34 +39,34 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         this: &Repeated<P, O>,
         input: &mut Input<I, E>,
         state: &mut usize,
-) -> Result<Option<M::Output<O>>, E::Error> {
+) -> Result<Option<M::Output<O>>, E::Error>
+where
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
+{
         if this.at_most != !0 && *state >= this.at_most as usize {
                 return Ok(None);
         }
 
-        let before = input.offset;
-
-        let Some(value) = M::invoke(&this.parser, input).ok() else {
-                return Ok(None);
+        let value = match M::invoke(&this.parser, input) {
+                Ok(ok) => ok,
+                Err(e) => {
+                        if *state >= this.at_least {
+                                return Ok(None);
+                        } else {
+                                return Err(e);
+                        }
+                }
         };
 
         *state += 1;
 
-        if *state < this.at_least {
-                return Err(LabelError::from_label(
-                        input.span_since(before),
-                        BuiltinLabel::NotEnoughElements {
-                                expected_amount: this.at_least,
-                                found_amount: *state,
-                        },
-                        input.current(),
-                ));
-        }
-
         Ok(Some(value))
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O> {
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O>
+where
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
+{
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let mut state = self.create_state(input)?;
                 while let Some(_) = self.check_next(input, &mut state)? {}
@@ -86,7 +82,10 @@ impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> f
         }
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O> {
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O>
+where
+        E::Error: LabelError<I, SeqLabel<I::Token>>,
+{
         type Item = O;
         type State = usize;
 
@@ -152,10 +151,20 @@ pub fn with_slice<
         Ok(slice)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, derive_more::Display)]
+#[display(bound = "Item: std::fmt::Debug")]
 pub enum SeqLabel<Item> {
+        #[display(fmt = "expected one of {_0:?}")]
         OneOf(Vec<Item>),
+        #[display(fmt = "expected anything but any of {_0:?}")]
         NoneOf(Vec<Item>),
+        #[display(
+                fmt = "not enough elements: expected {expected_amount} elements, but found {found_amount}"
+        )]
+        NotEnoughElements {
+                expected_amount: usize,
+                found_amount: usize,
+        },
 }
 
 /// A parser that accepts only one token out of the `things`.
@@ -308,7 +317,7 @@ where
         if *state < this.at_least {
                 return Err(LabelError::from_label(
                         input.span_since(before),
-                        BuiltinLabel::NotEnoughElements {
+                        SeqLabel::NotEnoughElements {
                                 expected_amount: this.at_least,
                                 found_amount: *state,
                         },

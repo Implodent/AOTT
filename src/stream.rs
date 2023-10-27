@@ -69,6 +69,12 @@ where
 {
         type Token = I::Item;
         type OwnedMut = I;
+        type Offset = usize;
+        type Span = Range<usize>;
+
+        fn span(&self, span: Range<Self::Offset>) -> Self::Span {
+                span
+        }
 
         #[inline(always)]
         fn start(&self) -> usize {
@@ -76,8 +82,8 @@ where
         }
 
         #[inline(always)]
-        fn prev(offset: usize) -> usize {
-                offset - 1
+        fn prev(&self, offset: usize) -> usize {
+                offset.saturating_sub(1)
         }
 
         #[cfg_attr(feature = "tracing", tracing::instrument(skip(self)))]

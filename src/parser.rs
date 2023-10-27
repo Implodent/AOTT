@@ -1,6 +1,5 @@
-use std::{marker::PhantomData, ops::Range};
+use std::marker::PhantomData;
 
-#[allow(deprecated)]
 use crate::{
         error::Error,
         input::{Input, InputType, SliceInput},
@@ -181,7 +180,10 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Returns an error if the parser failed.
         #[inline(always)]
         #[track_caller]
-        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E> {
+        fn parse_with_context(&self, input: I, context: E::Context) -> PResult<I, O, E>
+        where
+                E: ParserExtras<I>,
+        {
                 let mut input = Input::new_with_context(&input, &context);
                 self.parse_with(&mut input)
         }
@@ -231,33 +233,31 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         {
                 Map(self, PhantomData, mapper, PhantomData)
         }
+
         fn to<U>(self, value: U) -> To<Self, O, U>
         where
                 Self: Sized,
         {
                 To(self, value, PhantomData)
         }
+
         fn ignored(self) -> Ignored<Self, O>
         where
                 Self: Sized,
         {
                 Ignored(self, EmptyPhantom::new())
         }
-        fn try_map<F: Fn(O) -> Result<U, E::Error>, U>(self, f: F) -> TryMap<Self, F, O, U>
-        where
-                Self: Sized,
-        {
-                TryMap(self, f, PhantomData, PhantomData)
-        }
-        fn try_map_with_span<F: Fn(O, Range<usize>) -> Result<U, E::Error>, U>(
+
+        fn try_map<F: Fn(O, &mut MapExtra<I, E>) -> Result<U, E::Error>, U>(
                 self,
                 f: F,
-        ) -> TryMapWithSpan<Self, F, O, U>
+        ) -> TryMapWith<Self, F, O, U>
         where
                 Self: Sized,
         {
-                TryMapWithSpan(self, f, PhantomData, PhantomData)
+                TryMapWith(self, f, PhantomData, PhantomData)
         }
+
         fn filter<F: Fn(&O) -> bool, L: Clone, LF: Fn(O) -> L>(
                 self,
                 f: F,
@@ -273,7 +273,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// ```
         /// # use aott::prelude::*;
         /// use aott::text::Char;
-        /// let parser = filter::<&str, extra::Err<&str>>(|c: &char| c.is_ident_start()).then(filter(|c: &char| c.is_ident_continue()).repeated());
+        /// let parser = filter::<&str, extra::Err<&str>, _>(|c: &char| c.is_ident_start(), filtering("ident start")).then(filter(|c: &char| c.is_ident_continue(), filtering("ident continue")).repeated().collect::<Vec<_>>());
         /// assert_eq!(parser.parse("hello"), Ok(('h', "ello".chars().collect())));
         /// ```
         fn repeated(self) -> Repeated<Self, O>
@@ -348,13 +348,9 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         }
 }
 
-impl<
-                I: InputType,
-                O,
-                E: ParserExtras<I>,
-                // only input
-                F: Fn(&mut Input<I, E>) -> PResult<I, O, E>,
-        > Parser<I, O, E> for F
+// impl Parser for a fn(&mut Input) -> Result<O, E>
+impl<I: InputType, O, E: ParserExtras<I>, F: Fn(&mut Input<I, E>) -> PResult<I, O, E>>
+        Parser<I, O, E> for F
 {
         #[track_caller]
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
@@ -369,7 +365,6 @@ impl<
 pub trait ParserExtras<I: InputType> {
         type Error: Error<I>;
         type Context;
-        // type State;
 }
 
 /// See [`Parser::boxed`].
@@ -411,24 +406,6 @@ where
                 self
         }
 }
-
-// MEH ITS A FUCKING FUNCTION GUHHHHH
-
-// impl<I, O, E, T> Parser<I, O, E> for ::alloc::boxed::Box<T>
-// where
-//         I: InputType,
-//         E: ParserExtras<I>,
-//         T: Parser<I, O, E>,
-// {
-//         fn explode<'parse, M: Mode>(&self, inp: Input<I, E>) -> PResult<'parse, I, E, M, O>
-//         where
-//                 Self: Sized,
-//         {
-//                 T::explode::<M>(self, inp)
-//         }
-
-//         explode_extra!(O);
-// }
 
 impl<I, O, E, T> Parser<I, O, E> for ::alloc::rc::Rc<T>
 where

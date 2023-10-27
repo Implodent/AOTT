@@ -3,7 +3,7 @@ use std::{borrow::Borrow, marker::PhantomData};
 use crate::{
         container::OrderedSeq,
         derive::parser,
-        error::{FundamentalError, LabelError},
+        error::{Error, LabelError},
         input::{Input, InputType, StrInput},
         parser::ParserExtras,
         pfn_type,
@@ -358,7 +358,7 @@ pub fn just_ignore_case<
                                 {
                                         None
                                 }
-                                (_, found) => Some(FundamentalError::expected_token_found_or_eof(
+                                (_, found) => Some(Error::expected_token_found_or_eof(
                                         input.span_since(befunge),
                                         vec![next.into_clone()],
                                         found,
@@ -527,7 +527,7 @@ pub fn int<'a, I: InputType + StrInput<'a, C>, C: Char, E: ParserExtras<I>>(
         radix: u32,
 ) -> pfn_type!(I, &'a C::Str, E)
 where
-        E::Error: LabelError<I, CharLabel<C>>,
+        E::Error: LabelError<I, CharLabel<C>> + LabelError<I, SeqLabel<I::Token>>,
 {
         move |input| {
                 with_slice(input, move |input| {
