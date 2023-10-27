@@ -55,6 +55,31 @@ impl<O: Clone + Display> Span for Range<O> {
         fn context(&self) -> Self::Context {}
 }
 
+impl<O: Clone + Display, C: Clone> Span for (C, Range<O>) {
+        type Offset = O;
+
+        type Context = C;
+
+        fn new(context: Self::Context, range: Range<Self::Offset>) -> Self
+        where
+                Self: Sized,
+        {
+                (context, range)
+        }
+
+        fn start(&self) -> Self::Offset {
+                self.1.start.clone()
+        }
+
+        fn end(&self) -> Self::Offset {
+                self.1.end.clone()
+        }
+
+        fn context(&self) -> Self::Context {
+                self.0.clone()
+        }
+}
+
 #[allow(clippy::module_name_repetitions)]
 pub trait InputType {
         /// The token type that this input returns.
