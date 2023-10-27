@@ -41,7 +41,7 @@ impl<L, E> Located<L, E> {
         }
 }
 
-pub type PResult<I, O, E = crate::extra::Err<I>> = Result<O, <E as ParserExtras<I>>::Error>;
+pub type PResult<I, O, E> = Result<O, <E as ParserExtras<I>>::Error>;
 
 /// Implement `LabelError<I, Filtering>` to use `filter*` with your error.
 #[derive(Clone, Debug, PartialEq, Eq)]

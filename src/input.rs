@@ -4,7 +4,6 @@
 use crate::text::Char;
 use crate::{
         error::{Error, Located},
-        extra,
         parser::{Parser, ParserExtras},
 };
 use std::{
@@ -231,7 +230,7 @@ impl<T, E> Default for Errors<T, E> {
         }
 }
 
-pub struct InputOwned<I: InputType, E: ParserExtras<I> = extra::Err<I>> {
+pub struct InputOwned<I: InputType, E: ParserExtras<I>> {
         #[doc(hidden)]
         pub input: I,
         #[doc(hidden)]
@@ -281,7 +280,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
 /// If you do, support is not guaranteed.
 /// Changing the `offset` to arbitrary values could lead to undefined behavior. Don't modify anything in this struct if you want to be free of UB and/or segfaults.
 #[derive(Debug)]
-pub struct Input<'parse, I: InputType, E: ParserExtras<I> = extra::Err<I>> {
+pub struct Input<'parse, I: InputType, E: ParserExtras<I>> {
         #[doc(hidden)]
         pub offset: I::Offset,
         #[doc(hidden)]

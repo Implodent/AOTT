@@ -47,6 +47,7 @@ pub mod prelude {
         pub use crate::bytes;
         pub use crate::derive::parser;
         pub use crate::error::{Error, PResult};
+        #[cfg(feature = "builtin-extra")]
         pub use crate::extra;
         #[cfg(feature = "builtin-text")]
         pub use crate::input::StrInput;

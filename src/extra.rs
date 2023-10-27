@@ -1,3 +1,4 @@
+#![cfg(feature = "builtin-extra")]
 use crate::error::Error;
 use crate::input::{InputType, Span};
 use crate::parser::ParserExtras;

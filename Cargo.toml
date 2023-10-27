@@ -24,8 +24,9 @@ builtin-bytes = []
 nightly = []
 error-recovery = []
 serialization = []
+builtin-extra = []
 tracing = ["dep:tracing"]
-default = ["builtin-text"]
+default = ["builtin-text", "builtin-extra"]
 
 [badges]
 maintenance = { status = "actively-developed" }
