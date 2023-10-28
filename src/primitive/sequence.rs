@@ -303,6 +303,7 @@ where
                         if *state >= this.at_least {
                                 Ok(None)
                         } else { Err(e) }
+                }
         }
 }
 
