@@ -282,8 +282,6 @@ where
                 return Ok(None);
         }
 
-        let before = input.offset;
-
         if *state > 0 {
                 this.delimiter.check_with(input)?;
         } else if this.allow_leading && *state == 0 {
