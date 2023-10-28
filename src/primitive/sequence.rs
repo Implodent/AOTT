@@ -40,8 +40,6 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         input: &mut Input<I, E>,
         state: &mut usize,
 ) -> Result<Option<M::Output<O>>, E::Error>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
         if this.at_most != !0 && *state >= this.at_most as usize {
                 return Ok(None);
@@ -63,10 +61,7 @@ where
         Ok(Some(value))
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O> {
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
                 let mut state = self.create_state(input)?;
                 while let Some(_) = self.check_next(input, &mut state)? {}
@@ -82,10 +77,7 @@ where
         }
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O> {
         type Item = O;
         type State = usize;
 
@@ -158,13 +150,6 @@ pub enum SeqLabel<Item> {
         OneOf(Vec<Item>),
         #[display(fmt = "expected anything but any of {_0:?}")]
         NoneOf(Vec<Item>),
-        #[display(
-                fmt = "not enough elements: expected {expected_amount} elements, but found {found_amount}"
-        )]
-        NotEnoughElements {
-                expected_amount: usize,
-                found_amount: usize,
-        },
 }
 
 /// A parser that accepts only one token out of the `things`.
@@ -308,24 +293,17 @@ where
                 }
         }
 
-        let Some(value) = M::invoke(&this.parser, input).ok() else {
-                return Ok(None);
-        };
+        match M::invoke(&this.parser, input) {
+                Ok(value) => {
+                        *state += 1;
 
-        *state += 1;
-
-        if *state < this.at_least {
-                return Err(LabelError::from_label(
-                        input.span_since(before),
-                        SeqLabel::NotEnoughElements {
-                                expected_amount: this.at_least,
-                                found_amount: *state,
-                        },
-                        input.current(),
-                ));
+                        Ok(Some(value))
+                }
+                Err(e) => {
+                        if *state >= this.at_least {
+                                Ok(None)
+                        } else { Err(e) }
         }
-
-        Ok(Some(value))
 }
 
 impl<I: InputType, O, OD, E: ParserExtras<I>, P: Parser<I, O, E>, D: Parser<I, OD, E>>
