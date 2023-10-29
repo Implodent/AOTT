@@ -10,6 +10,9 @@ repository = "https://github.com/Implodent/AOTT"
 keywords = ["parser", "combinator", "token", "syntax"]
 categories = ["parsing", "text-processing"]
 
+[[bench]]
+name = "json"
+
 [dependencies]
 hashbrown = "0.14.0"
 aott_derive = { path = "./derive", version = "0.3.0" }

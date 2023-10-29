@@ -553,7 +553,7 @@ where
 }
 
 #[derive(Copy, Clone)]
-pub struct Padded<A, C>(A, PhantomData<C>);
+pub struct Padded<A, C>(pub(crate) A, pub(crate) PhantomData<C>);
 
 /// A parser that accepts and ignores any number of whitespace characters before or after another parser.
 pub fn padded<

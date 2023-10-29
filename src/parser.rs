@@ -276,6 +276,7 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// let parser = filter::<&str, extra::Err<&str>, _>(|c: &char| c.is_ident_start(), filtering("ident start")).then(filter(|c: &char| c.is_ident_continue(), filtering("ident continue")).repeated().collect::<Vec<_>>());
         /// assert_eq!(parser.parse("hello"), Ok(('h', "ello".chars().collect())));
         /// ```
+        #[cfg_attr(debug_assertions, track_caller)]
         fn repeated(self) -> Repeated<Self, O>
         where
                 Self: Sized,
@@ -285,6 +286,8 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                         at_least: 0,
                         at_most: !0,
                         phantom: PhantomData,
+                        #[cfg(debug_assertions)]
+                        location: std::panic::Location::caller().clone(),
                 }
         }
 
@@ -335,6 +338,25 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Self: Sized,
         {
                 Maybe(self)
+        }
+
+        fn delimited_by<P: Parser<I, O1, E>, T: Parser<I, O2, E>, O1, O2>(
+                self,
+                preceding: P,
+                terminating: T,
+        ) -> Delimited<P, O1, Self, T, O2>
+        where
+                Self: Sized,
+        {
+                Delimited(preceding, self, terminating, PhantomData)
+        }
+
+        #[cfg(feature = "builtin-text")]
+        fn padded(self) -> crate::text::Padded<Self, I::Token>
+        where
+                Self: Sized,
+        {
+                crate::text::Padded(self, PhantomData)
         }
 
         #[doc(hidden)]

@@ -14,6 +14,8 @@ pub struct Repeated<P, O> {
         // Slightly evil: should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
         pub(crate) at_most: u64,
         pub(crate) phantom: PhantomData<O>,
+        #[cfg(debug_assertions)]
+        pub(crate) location: std::panic::Location<'static>,
 }
 
 impl<P, O> Repeated<P, O> {
@@ -39,10 +41,7 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         this: &Repeated<P, O>,
         input: &mut Input<I, E>,
         state: &mut usize,
-) -> Result<Option<M::Output<O>>, E::Error>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+) -> Result<Option<M::Output<O>>, E::Error> {
         if this.at_most != !0 && *state >= this.at_most as usize {
                 return Ok(None);
         }
@@ -63,29 +62,85 @@ where
         Ok(Some(value))
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> Parser<I, (), E> for Repeated<P, O> {
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                let mut state = self.create_state(input)?;
-                while let Some(_) = self.check_next(input, &mut state)? {}
+                if self.at_most == !0 && self.at_least == 0 {
+                        loop {
+                                #[cfg(debug_assertions)]
+                                let before = input.save();
 
-                Ok(())
+                                match self.parser.check_with(input) {
+                                        Ok(()) => {}
+                                        Err(_) => break Ok(()),
+                                }
+
+                                #[cfg(debug_assertions)]
+                                debug_assert!(
+                                        before.offset != input.offset(),
+                                        "found Repeated combinator making no progress at {}",
+                                        self.location
+                                );
+                        }
+                } else {
+                        let mut state = self.create_state(input)?;
+                        loop {
+                                #[cfg(debug_assertions)]
+                                let before = input.offset();
+                                match self.check_next(input, &mut state) {
+                                        Ok(Some(())) => {}
+                                        Ok(None) => break Ok(()),
+                                        Err(e) => break Err(e),
+                                }
+                                #[cfg(debug_assertions)]
+                                debug_assert!(
+                                        before != input.offset(),
+                                        "found Repeated combinator making no progress at {}",
+                                        self.location,
+                                );
+                        }
+                }
         }
 
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                let mut state = self.create_state(input)?;
-                while let Some(_) = self.check_next(input, &mut state)? {}
+                if self.at_most == !0 && self.at_least == 0 {
+                        loop {
+                                #[cfg(debug_assertions)]
+                                let before = input.save();
 
-                Ok(())
+                                match self.parser.check_with(input) {
+                                        Ok(()) => {}
+                                        Err(_) => break Ok(()),
+                                }
+
+                                #[cfg(debug_assertions)]
+                                debug_assert!(
+                                        before.offset != input.offset(),
+                                        "found Repeated combinator making no progress at {}",
+                                        self.location
+                                );
+                        }
+                } else {
+                        let mut state = self.create_state(input)?;
+                        loop {
+                                #[cfg(debug_assertions)]
+                                let before = input.offset();
+                                match self.check_next(input, &mut state) {
+                                        Ok(Some(())) => {}
+                                        Ok(None) => break Ok(()),
+                                        Err(e) => break Err(e),
+                                }
+                                #[cfg(debug_assertions)]
+                                debug_assert!(
+                                        before != input.offset(),
+                                        "found Repeated combinator making no progress at {}",
+                                        self.location,
+                                );
+                        }
+                }
         }
 }
 
-impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>> IterParser<I, E> for Repeated<P, O> {
         type Item = O;
         type State = usize;
 
@@ -158,13 +213,6 @@ pub enum SeqLabel<Item> {
         OneOf(Vec<Item>),
         #[display(fmt = "expected anything but any of {_0:?}")]
         NoneOf(Vec<Item>),
-        #[display(
-                fmt = "not enough elements: expected {expected_amount} elements, but found {found_amount}"
-        )]
-        NotEnoughElements {
-                expected_amount: usize,
-                found_amount: usize,
-        },
 }
 
 /// A parser that accepts only one token out of the `things`.
@@ -218,17 +266,56 @@ where
 /// let parser = delimited(just("\""), any::<_, extra::Err<_>>, just("\""));
 /// assert_eq!(parser.parse(input), Ok('h'));
 /// ```
-pub fn delimited<I: InputType, E: ParserExtras<I>, O, O1, O2>(
-        start_delimiter: impl Parser<I, O2, E>,
-        content_parser: impl Parser<I, O, E>,
-        end_delimiter: impl Parser<I, O1, E>,
-) -> pfn_type!(I, O, E) {
-        move |input| {
-                start_delimiter.check_with(input)?;
-                let content = content_parser.parse_with(input)?;
-                end_delimiter.check_with(input)?;
+pub fn delimited<
+        I: InputType,
+        E: ParserExtras<I>,
+        P: Parser<I, PO, E>,
+        C: Parser<I, O, E>,
+        O,
+        T: Parser<I, TO, E>,
+        PO,
+        TO,
+>(
+        preceding: P,
+        content: C,
+        terminating: T,
+) -> Delimited<P, PO, C, T, TO> {
+        content.delimited_by(preceding, terminating)
+}
+
+// preceding, content, terminating
+pub struct Delimited<P, PO, C, T, TO>(
+        pub(crate) P,
+        pub(crate) C,
+        pub(crate) T,
+        pub(crate) PhantomData<(PO, TO)>,
+);
+
+impl<
+                I: InputType,
+                E: ParserExtras<I>,
+                O,
+                O1,
+                O2,
+                P: Parser<I, O1, E>,
+                C: Parser<I, O, E>,
+                T: Parser<I, O2, E>,
+        > Parser<I, O, E> for Delimited<P, O1, C, T, O2>
+{
+        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
+                self.0.check_with(input)?;
+                let content = self.1.parse_with(input)?;
+                self.2.check_with(input)?;
 
                 Ok(content)
+        }
+
+        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
+                self.0.check_with(input)?;
+                self.1.check_with(input)?;
+                self.2.check_with(input)?;
+
+                Ok(())
         }
 }
 
@@ -283,10 +370,7 @@ fn sep_impl<
         this: &SeparatedBy<P, D, O, OD>,
         input: &mut Input<I, E>,
         state: &mut usize,
-) -> Result<Option<M::Output<O>>, E::Error>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
-{
+) -> Result<Option<M::Output<O>>, E::Error> {
         if this.at_most != !0 && *state >= this.at_most as usize {
                 if this.allow_trailing {
                         let before_delimiter = input.save();
@@ -297,8 +381,6 @@ where
                 return Ok(None);
         }
 
-        let before = input.offset;
-
         if *state > 0 {
                 this.delimiter.check_with(input)?;
         } else if this.allow_leading && *state == 0 {
@@ -308,30 +390,24 @@ where
                 }
         }
 
-        let Some(value) = M::invoke(&this.parser, input).ok() else {
-                return Ok(None);
+        let value = match M::invoke(&this.parser, input) {
+                Ok(ok) => ok,
+                Err(e) => {
+                        if *state >= this.at_least {
+                                return Ok(None);
+                        } else {
+                                return Err(e);
+                        }
+                }
         };
 
         *state += 1;
-
-        if *state < this.at_least {
-                return Err(LabelError::from_label(
-                        input.span_since(before),
-                        SeqLabel::NotEnoughElements {
-                                expected_amount: this.at_least,
-                                found_amount: *state,
-                        },
-                        input.current(),
-                ));
-        }
 
         Ok(Some(value))
 }
 
 impl<I: InputType, O, OD, E: ParserExtras<I>, P: Parser<I, O, E>, D: Parser<I, OD, E>>
         IterParser<I, E> for SeparatedBy<P, D, O, OD>
-where
-        E::Error: LabelError<I, SeqLabel<I::Token>>,
 {
         type Item = O;
         type State = usize;
