@@ -41,7 +41,6 @@ fn repeated_impl<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>, M: Mod
         this: &Repeated<P, O>,
         input: &mut Input<I, E>,
         state: &mut usize,
-<<<<<<< HEAD
 ) -> Result<Option<M::Output<O>>, E::Error> {
         if this.at_most != !0 && *state >= this.at_most as usize {
                 return Ok(None);
