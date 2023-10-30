@@ -6,6 +6,7 @@ extern crate aott;
 extern crate test;
 
 use aott::prelude::*;
+use aott::text::*;
 use test::black_box;
 use test::Bencher;
 
