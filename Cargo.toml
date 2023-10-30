@@ -29,7 +29,7 @@ error-recovery = []
 serialization = []
 builtin-extra = []
 tracing = ["dep:tracing"]
-default = ["builtin-text", "builtin-extra"]
+default = ["builtin-text", "builtin-extra", "error-recovery"]
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -39,3 +39,4 @@ zstd-safe = { version = "6.0.6", features = ["std"] }
 
 [[example]]
 name = "brainfuck"
+required-features = ["builtin-extra"]

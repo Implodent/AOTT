@@ -239,19 +239,20 @@ pub trait ExactSizeInput: InputType {
         unsafe fn span_from(&self, range: RangeFrom<usize>) -> Range<usize>;
 }
 
-#[doc(hidden)]
-#[derive(Debug)]
-pub struct Errors<T, E> {
-        pub alt: Option<Located<T, E>>,
-        pub secondary: Vec<Located<T, E>>,
+#[derive(Debug, Clone)]
+pub struct Errors<L, E> {
+        pub secondary: Vec<Located<L, E>>,
 }
 
-impl<T, E> Default for Errors<T, E> {
+impl<L, E> Errors<L, E> {
+        pub fn emit(&mut self, pos: L, err: E) {
+                self.secondary.push(Located { pos, err })
+        }
+}
+
+impl<L, E> Default for Errors<L, E> {
         fn default() -> Self {
-                Self {
-                        alt: None,
-                        secondary: vec![],
-                }
+                Self { secondary: vec![] }
         }
 }
 
@@ -260,17 +261,11 @@ pub struct InputOwned<I: InputType, E: ParserExtras<I>> {
         pub input: I,
         #[doc(hidden)]
         pub cx: E::Context,
-        #[doc(hidden)]
-        pub errors: Errors<usize, E::Error>,
 }
 
 impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
         pub fn from_input_with_context(input: I, context: E::Context) -> Self {
-                Self {
-                        input,
-                        cx: context,
-                        errors: Errors::default(),
-                }
+                Self { input, cx: context }
         }
         pub fn from_input(input: I) -> Self
         where
@@ -279,7 +274,6 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                 Self {
                         input,
                         cx: E::Context::default(),
-                        errors: Errors::default(),
                 }
         }
         pub fn as_ref_at_zero(&mut self) -> Input<'_, I, E> {
@@ -287,6 +281,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                         offset: self.input.start(),
                         input: &self.input,
                         cx: &self.cx,
+                        errors: Errors::default(),
                 }
         }
 
@@ -295,6 +290,7 @@ impl<I: InputType, E: ParserExtras<I>> InputOwned<I, E> {
                         offset,
                         input: &self.input,
                         cx: &self.cx,
+                        errors: Errors::default(),
                 }
         }
 }
@@ -310,8 +306,8 @@ pub struct Input<'parse, I: InputType, E: ParserExtras<I>> {
         pub offset: I::Offset,
         #[doc(hidden)]
         pub input: &'parse I,
-        // #[doc(hidden)]
-        // pub errors: &'parse mut Errors<usize, E::Error>,
+        #[doc(hidden)]
+        pub errors: Errors<I::Offset, E::Error>,
         #[doc(hidden)]
         pub cx: &'parse E::Context,
 }
@@ -321,6 +317,7 @@ impl<'parse, I: InputType, E: ParserExtras<I, Context = ()>> Input<'parse, I, E>
                 Self {
                         offset: input.start(),
                         input,
+                        errors: Errors::default(),
                         cx: &(),
                 }
         }
@@ -334,6 +331,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 Self {
                         offset: input.start(),
                         input,
+                        errors: Errors::default(),
                         cx,
                 }
         }
@@ -380,7 +378,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         pub fn save(&self) -> Marker<I> {
                 Marker {
                         offset: self.offset,
-                        err_count: 0, //self.errors.secondary.len(),
+                        err_count: self.errors.secondary.len(),
                 }
         }
 
@@ -389,7 +387,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
         /// You can create a marker with which to perform rewinding using [`Self::save`].
         #[inline(always)]
         pub fn rewind(&mut self, marker: Marker<I>) {
-                // self.errors.secondary.truncate(marker.err_count);
+                self.errors.secondary.truncate(marker.err_count);
                 self.offset = marker.offset;
         }
 
@@ -468,6 +466,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 Input {
                         input: self.input,
                         cx,
+                        errors: Errors::default(),
                         offset: self.offset,
                 }
         }
@@ -477,12 +476,13 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 Input {
                         input: self.input,
                         cx: &(),
+                        errors: Errors::default(),
                         offset: self.offset,
                 }
         }
 
         #[inline(always)]
-        pub fn parse_with_context<E2: ParserExtras<I>, O>(
+        pub fn parse_with_context<E2: ParserExtras<I, Error = E::Error>, O>(
                 &mut self,
                 cx: &'parse E2::Context,
                 parser: impl Parser<I, O, E2>,
@@ -492,12 +492,13 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 let result = input.parse(&parser);
 
                 self.offset = input.offset;
+                self.errors.secondary.extend(input.errors.secondary);
 
                 result
         }
 
         #[inline(always)]
-        pub fn parse_no_context<E2: ParserExtras<I, Context = ()>, O>(
+        pub fn parse_no_context<E2: ParserExtras<I, Context = (), Error = E::Error>, O>(
                 &mut self,
                 parser: impl Parser<I, O, E2>,
         ) -> Result<O, E2::Error> {
@@ -506,6 +507,7 @@ impl<'parse, I: InputType, E: ParserExtras<I>> Input<'parse, I, E> {
                 let result = input.parse(&parser);
 
                 self.offset = input.offset;
+                self.errors.secondary.extend(input.errors.secondary);
 
                 result
         }

@@ -55,8 +55,8 @@ pub mod prelude {
         pub use crate::iter::*;
         pub use crate::parser::{Parser, ParserExtras};
         pub use crate::primitive::*;
-        #[cfg(feature = "serialization")]
-        pub use crate::ser::*;
+        #[cfg(feature = "error-recovery")]
+        pub use crate::recovery::{noop, via_parser, Strategy};
         pub use crate::stream::Stream;
         #[cfg(feature = "builtin-text")]
         pub use crate::text;

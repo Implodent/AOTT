@@ -8,6 +8,7 @@ use crate::{
         *,
 };
 
+#[doc(hidden)]
 pub use mode::*;
 
 pub mod mode {
@@ -57,7 +58,7 @@ pub mod mode {
                 /// Given an array of outputs, bind them into an output of arrays
                 fn array<T, const N: usize>(x: [Self::Output<T>; N]) -> Self::Output<[T; N]>;
 
-                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E> + ?Sized>(
                         parser: &P,
                         input: &mut Input<I, E>,
                 ) -> PResult<I, Self::Output<O>, E>;
@@ -110,7 +111,7 @@ pub mod mode {
                         f(output);
                 }
                 #[inline(always)]
-                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E> + ?Sized>(
                         parser: &P,
                         input: &mut Input<I, E>,
                 ) -> PResult<I, Self::Output<O>, E> {
@@ -152,7 +153,7 @@ pub mod mode {
                 }
                 #[inline(always)]
                 fn array<T, const N: usize>(_: [Self::Output<T>; N]) -> Self::Output<[T; N]> {}
-                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E>>(
+                fn invoke<I: InputType, O, E: ParserExtras<I>, P: Parser<I, O, E> + ?Sized>(
                         parser: &P,
                         input: &mut Input<I, E>,
                 ) -> PResult<I, Self::Output<O>, E> {
@@ -162,7 +163,22 @@ pub mod mode {
 }
 
 pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
-        /// Invokes this parser on this input.
+        /// Invokes this parser with the specified [`Mode`]. This is meant for advanced users or library developers who want to avoid boilerplate.
+        /// If you are implementing a parser that changes small amounts of code between modes ([`Check`] and [`Emit`]), you might implement a, "mode-agnostic" piece of code, that being the implementation of this function;
+        /// and then use the [`go_extra!`] macro to invoke this implementation in [`Parser::parse_with`] ([`Emit`] mode) and [`Parser::check_with`] ([`Check`] mode), respectively.
+        ///
+        /// # See also
+        /// - [`Mode`], specifically [`Mode::invoke`], which is used in the default implementation of this function, so parsers that don't implement this function can still be called in this manner.
+        #[doc(hidden)]
+        fn go<M: Mode>(&self, input: &mut Input<I, E>) -> Result<M::Output<O>, E::Error>
+        where
+                Self: Sized,
+        {
+                M::invoke(self, input)
+        }
+
+        /// Invokes this parser on the specified input.
+        ///
         /// # Errors
         /// Returns an error if the parser failed.
         #[inline(always)]
@@ -193,11 +209,24 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
         /// Returns an error if the parser failed.
         #[track_caller]
         fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E>;
+
         /// Runs the parser logic without producing output, thus significantly reducing the number of allocations.
         /// # Errors
         /// Returns an error if the parser failed.
         #[track_caller]
         fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E>;
+
+        /// Try to recover from errors with this specified strategy.
+        #[cfg(feature = "error-recovery")]
+        fn recover_with<S>(self, strategy: S) -> crate::recovery::RecoverWith<Self, S>
+        where
+                Self: Sized,
+        {
+                crate::recovery::RecoverWith {
+                        parser: self,
+                        strategy,
+                }
+        }
 
         /// Transform this parser to try and invoke the `other` parser on failure, and if that one fails, fail too.
         /// If you are chaining a lot of [`or`](`Parser::or`) calls, please consider using [`choice`].
@@ -413,12 +442,11 @@ where
         I: InputType,
         E: ParserExtras<I>,
 {
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
-                self.inner.parse_with(input)
+        fn go<M: Mode>(&self, input: &mut Input<I, E>) -> Result<M::Output<O>, E::Error> {
+                M::invoke(&*self.inner, input)
         }
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                self.inner.check_with(input)
-        }
+
+        go_extra!(O);
 
         fn boxed<'c>(self) -> Boxed<'c, I, O, E>
         where
@@ -435,12 +463,11 @@ where
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                self.deref().check_with(input)
+        fn go<M: Mode>(&self, input: &mut Input<I, E>) -> Result<M::Output<O>, E::Error> {
+                self.deref().go::<M>(input)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
-                self.deref().parse_with(input)
-        }
+
+        go_extra!(O);
 }
 
 impl<I, O, E, T> Parser<I, O, E> for ::alloc::sync::Arc<T>
@@ -449,10 +476,35 @@ where
         E: ParserExtras<I>,
         T: Parser<I, O, E>,
 {
-        fn check_with(&self, input: &mut Input<I, E>) -> PResult<I, (), E> {
-                self.deref().check_with(input)
+        fn go<M: Mode>(&self, input: &mut Input<I, E>) -> Result<M::Output<O>, E::Error> {
+                self.deref().go::<M>(input)
         }
-        fn parse_with(&self, input: &mut Input<I, E>) -> PResult<I, O, E> {
-                self.deref().parse_with(input)
-        }
+
+        go_extra!(O);
+}
+
+#[macro_export]
+macro_rules! go_extra {
+        ($output:ty) => {
+                fn check_with(&self, input: &mut Input<I, E>) -> $crate::PResult<I, (), E> {
+                        self.go::<$crate::parser::Check>(input)
+                }
+                fn parse_with(&self, input: &mut Input<I, E>) -> $crate::PResult<I, $output, E> {
+                        self.go::<$crate::parser::Emit>(input)
+                }
+        };
+        ($input:ty, $output:ty, $extras:ty) => {
+                fn check_with(
+                        &self,
+                        input: &mut Input<$input, $extras>,
+                ) -> $crate::PResult<$input, (), $extras> {
+                        self.go::<$crate::parser::Check>(input)
+                }
+                fn parse_with(
+                        &self,
+                        input: &mut Input<$input, $extras>,
+                ) -> $crate::PResult<$input, $output, $extras> {
+                        self.go::<$crate::parser::Emit>(input)
+                }
+        };
 }

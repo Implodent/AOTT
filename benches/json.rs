@@ -6,7 +6,6 @@ extern crate aott;
 extern crate test;
 
 use aott::prelude::*;
-use aott::text::*;
 use test::black_box;
 use test::Bencher;
 
@@ -92,7 +91,7 @@ const INPUT: &str = include_str!("sample.json");
 #[bench]
 fn naive(b: &mut Bencher) {
         let input = black_box(INPUT.trim());
-        println!("{input}");
+        // println!("{input}");
         println!("{:?}", black_box(naive::parse(input)).unwrap());
         b.iter(|| black_box(naive::parse(black_box(input))).unwrap())
 }
