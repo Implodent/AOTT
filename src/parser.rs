@@ -380,6 +380,22 @@ pub trait Parser<I: InputType, O, E: ParserExtras<I>> {
                 Delimited(preceding, self, terminating, PhantomData)
         }
 
+        fn validate<U, F>(self, f: F) -> Validate<Self, F, O>
+        where
+                Self: Sized,
+                F: for<'input, 'parse> Fn(
+                        O,
+                        &mut MapExtra<'input, 'parse, I, E>,
+                        &mut Emitter<E::Error>,
+                ) -> U,
+        {
+                Validate {
+                        parser: self,
+                        validator: f,
+                        _phantom: PhantomData,
+                }
+        }
+
         #[cfg(feature = "builtin-text")]
         fn padded(self) -> crate::text::Padded<Self, I::Token>
         where
@@ -507,4 +523,57 @@ macro_rules! go_extra {
                         self.go::<$crate::parser::Emit>(input)
                 }
         };
+}
+
+pub struct Validate<A, F, OA> {
+        parser: A,
+        validator: F,
+        _phantom: PhantomData<OA>,
+}
+
+impl<
+                U,
+                I: InputType,
+                O,
+                E: ParserExtras<I>,
+                A: Parser<I, O, E>,
+                F: for<'input, 'parse> Fn(
+                        O,
+                        &mut MapExtra<'input, 'parse, I, E>,
+                        &mut Emitter<E::Error>,
+                ) -> U,
+        > Parser<I, U, E> for Validate<A, F, O>
+{
+        fn go<M: Mode>(&self, input: &mut Input<I, E>) -> Result<M::Output<U>, E::Error>
+        where
+                Self: Sized,
+        {
+                let before = input.offset;
+                let out = self.parser.parse_with(input)?;
+
+                let mut emitter = Emitter(vec![]);
+                let checked = (self.validator)(
+                        out,
+                        &mut MapExtra {
+                                start: before,
+                                input,
+                        },
+                        &mut emitter,
+                );
+
+                for error in emitter.0 {
+                        input.errors.emit(input.offset, error);
+                }
+
+                Ok(M::bind(|| checked))
+        }
+
+        go_extra!(U);
+}
+
+pub struct Emitter<E>(pub(crate) Vec<E>);
+impl<E> Emitter<E> {
+        pub fn emit(&mut self, error: E) {
+                self.0.push(error);
+        }
 }

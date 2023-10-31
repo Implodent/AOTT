@@ -5,7 +5,7 @@ use crate::input::SliceInput;
 use super::*;
 
 pub struct MapExtra<'input, 'parse, I: InputType, E: ParserExtras<I>> {
-        start: I::Offset,
+        pub(crate) start: I::Offset,
         #[doc(hidden)]
         pub input: &'input mut Input<'parse, I, E>,
 }
