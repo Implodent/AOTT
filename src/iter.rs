@@ -25,11 +25,20 @@ pub trait IterParser<I: InputType, E: ParserExtras<I>> {
         /// Creates the state that the parser would use.
         fn create_state(&self, input: &mut Input<I, E>) -> Result<Self::State, E::Error>;
 
+        /// Creates a parser that collects all of the items yielded by this parser into `B`.
         fn collect<B: FromIterator<Self::Item>>(self) -> Collect<Self, B>
         where
                 Self: Sized,
         {
                 Collect(self, PhantomData)
+        }
+
+        /// This parser adapter lets you specify an end point for this iterator parser: if it
+        /// encounters something that matches the `until` parser, it will stop producing items.
+        /// This is useful for parsing, for example, a repeated sequence of tokens inside of some
+        /// delimiter like parenthesis.
+        fn until<UO, U: Parser<I, UO, E>>(self, until: U) -> Until<Self, U, UO> where Self: Sized {
+            Until(self, until, PhantomData)
         }
 }
 
@@ -106,5 +115,53 @@ impl<'a, 'input, 'parse, I: InputType, E: ParserExtras<I>, P: IterParser<I, E>> 
                 };
 
                 self.parser.check_next(self.input, state).ok().flatten()
+        }
+}
+
+pub struct Until<P, U, UO>(P, U, PhantomData<UO>);
+
+impl<I: InputType, E: ParserExtras<I>, P: IterParser<I, E>, U: Parser<I, UO, E>, UO>
+        IterParser<I, E> for Until<P, U, UO>
+{
+        type Item = P::Item;
+        type State = P::State;
+
+        fn create_state(
+                &self,
+                input: &mut Input<I, E>,
+        ) -> Result<Self::State, E::Error> {
+                self.0.create_state(input)
+        }
+
+        fn next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<Self::Item>, E::Error> {
+                let before = input.save();
+
+                if let Ok(()) = self.1.check_with(input) {
+                        return Ok(None);
+                } else {
+                        input.rewind(before);
+                }
+
+                self.0.next(input, state)
+        }
+
+        fn check_next(
+                &self,
+                input: &mut Input<I, E>,
+                state: &mut Self::State,
+        ) -> Result<Option<()>, E::Error> {
+                let before = input.save();
+
+                if let Ok(()) = self.1.check_with(input) {
+                        return Ok(None);
+                } else {
+                        input.rewind(before);
+                }
+
+                self.0.check_next(input, state)
         }
 }

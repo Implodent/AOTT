@@ -28,6 +28,7 @@ nightly = []
 error-recovery = []
 serialization = []
 builtin-extra = []
+sync = []
 tracing = ["dep:tracing"]
 default = ["builtin-text", "builtin-extra", "error-recovery"]
 

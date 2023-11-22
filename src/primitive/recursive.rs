@@ -25,6 +25,7 @@ impl<'a, I: InputType, O, E: ParserExtras<I>> Recursive<'a, I, O, E> {
                                 .expect("recursive parser used before definition"),
                 }
         }
+
         pub fn declare() -> Self {
                 Self(RecursiveImp::Owned(crate::sync::RefC::new(OnceCell::new())))
         }

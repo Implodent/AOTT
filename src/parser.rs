@@ -48,6 +48,7 @@ pub mod mode {
                         y: Self::Output<U>,
                         f: F,
                 ) -> Self::Output<V>;
+
                 /// By-reference version of [`Mode::combine`].
                 fn combine_mut<T, U, F: FnOnce(&mut T, U)>(
                         x: &mut Self::Output<T>,
